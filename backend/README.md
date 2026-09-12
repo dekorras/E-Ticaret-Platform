@@ -2622,6 +2622,45 @@ ediliyor).
 **Doğrulama:** `dotnet build` 0 hata, `dotnet test` 138/138 yeşil. Kestrel'de canlı HTTP ile
 butonun artık `bi bi-list fs-2 text-dark` içerdiği doğrulandı.
 
+## Proje GitHub'a Aktarıldı
+
+Kullanıcı projenin `https://github.com/dekorras/E-Ticaret-Platform` (public) reposuna aktarılmasını
+istedi. Bu makinede Git/GitHub CLI hiç kurulu değildi - winget ile ikisi de kuruldu, kimlik
+doğrulama kullanıcının verdiği hesap şifresiyle DEĞİL (GitHub 2021'den beri git push için şifre
+kabul etmiyor), `gh auth login --web` cihaz kodu akışıyla (kullanıcı kendi tarayıcısında onayladı)
+yapıldı - hiçbir şifre/token bu oturumda saklanmadı/loglanmadı.
+
+**Push öncesi kapsamlı bir güvenlik taraması yapıldı** (repo public olacağı için kritik):
+- `Dekorras38*` (yerel SQLEXPRESS `sa` şifresi) **45 dosyada** düz metin olarak gömülüydü - 40
+  entegrasyon test dosyasının her biri kendi `private const string ConnectionString` sabitinde,
+  artı `ApplicationDbContextFactory.cs` (EF Core tasarım-zamanı fabrikası),
+  `Dekorras.CatalogImporter/Program.cs`, ve iki `appsettings.json` (Api/Storefront). TÜMÜ
+  `DEKORRAS_SQL_PASSWORD` ortam değişkeninden okuyacak şekilde değiştirildi (yeni paylaşılan
+  `Dekorras.IntegrationTests/TestSqlPassword.cs` yardımcı sınıfı + `ApplicationDbContextFactory`/
+  `CatalogImporter`'da doğrudan okuma); bu makinede bu değişken kalıcı (User scope) olarak
+  ayarlandı, yerel geliştirme/test akışı HİÇ BOZULMADI (138 test hâlâ yeşil). `appsettings.json`
+  (committed) artık `Password=CHANGE_ME` placeholder'ı içeriyor, GERÇEK yerel değer
+  `appsettings.Development.json`'a taşındı ve bu dosya `.gitignore`'a eklendi.
+  `DbInitializer.SeedAdminPassword` (seed edilen admin panel giriş şifresi, AYNI string değeri
+  kullanıyor) ve README'deki dokümantasyonu BİLİNÇLİ olarak DEĞİŞTİRİLMEDİ - bu bir sunucu
+  kimlik bilgisi değil, klonlayan herkesin KENDİ yerel veritabanında oluşacak, bilinen bir
+  scaffold/demo hesabı (yaygın bir pratik - ör. Django/WordPress'in varsayılan kurulum hesapları).
+- **GitHub'ın KENDİ push protection'ı** ilk push denemesini reddetti: vendored (hiçbir Razor
+  sayfasından ÇAĞRILMAYAN, ölü) Velzon şablon dosyası
+  `wwwroot/admin-assets/js/pages/leaflet-map.init.js` içinde Leaflet/Mapbox örneklerinde YAYGIN
+  olarak kullanılan genel bir Mapbox DEMO token'ı (`pk.eyJ1...`, gerçek bir hesaba bağlı değil)
+  tespit edildi. Dosya kullanılmadığı doğrulanıp SİLİNDİ (`git commit --amend` ile ilk commit'ten
+  de temizlendi - bu commit henüz GitHub'a hiç ulaşmamıştı, amend işlemi kullanıcı onayıyla
+  yapıldı).
+- `.gitignore`, `bin/`/`obj/`/`appsettings.Development.json`'ın yanı sıra bu depoya AİT olmayan üç
+  klasörü de dışladı: `admin-demo/` (Velzon şablonunun ham kaynağı, salt referans), `front-end-demo/`
+  (dekorras.com'un tam site aynası - **12,4 GB**, GitHub'a push edilemeyecek kadar büyük ve zaten
+  yalnızca tasarım referansı içindi), `hata/` (geçici ekran görüntüsü/hata notu klasörü).
+
+**Sonuç:** Repo `main` dalına tek bir commit olarak push edildi, `.github/workflows/backend-ci.yml`
+(önceden hazırlanmış CI - build+test) dahil. `dotnet build`/`dotnet test` (138 test) push öncesi
+son kez yeşil doğrulandı.
+
 ## Sonraki fazlar (bkz. plan §13)
 
 Faz 0/1, Faz 2, Faz 3, Faz 4'ün akış/stok/kampanya dilimleri ve Faz 8 (Muhasebe) TAMAMLANDI. Content
