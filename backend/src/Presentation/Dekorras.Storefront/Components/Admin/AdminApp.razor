@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="tr" data-layout="vertical" data-topbar="light" data-sidebar="dark" data-sidebar-size="lg" data-sidebar-image="none" data-preloader="disable" data-theme="default" data-theme-colors="default">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- ÖNEMLİ: burası ÖNCEDEN "/admin/" idi (NavMenu.razor'daki göreli bağlantıların "doğru"
+         çözülmesi için) - bu GERÇEK bir hataya yol açtığı bu turda keşfedildi: Blazor Server'ın
+         KENDİ SignalR circuit/framework uç noktaları (ör. "_blazor/initializers") <base href>'e
+         GÖRE göreli hesaplanıyor, ama bu uygulamada `MapRazorComponents<AdminApp>()` sunucu
+         tarafında HER ZAMAN kök'te ("/_blazor") dinliyor (route group ile "/admin" altına
+         taşınamıyor) - "/admin/" base href ile tarayıcı "/admin/_blazor/..." isteği atıyor, sunucu
+         404 dönüyordu, bu da OnAfterRenderAsync'teki İLK JS interop çağrısını patlatıp Blazor
+         Server'ın TÜM circuit'i (ve dolayısıyla sayfadaki HER butonu) fatal sayıp düşürmesine yol
+         açıyordu - bkz. backend/README.md'deki "BannerZoneBuilder'da hiçbir buton çalışmıyor"
+         bulgusu. Düzeltme: base href GERÇEK kökle ("/") eşleşecek şekilde değiştirildi;
+         NavMenu.razor + RoleList.razor + AdminUserList.razor'daki TÜM göreli bağlantılar
+         "/admin/..." önekiyle MUTLAK hale getirildi (bkz. o dosyalardaki değişiklik). @Assets[...]
+         çağrıları zaten mutlaktı (bkz. devamı 68), bu değişiklikten ETKİLENMEZLER. -->
+    <base href="/" />
+    <ResourcePreloader />
+    <!-- Velzon (themesbrand.com) admin dashboard şablonu - bkz. plan "Admin Panel Velzon Reskin".
+         ÖNEMLİ: @Assets[...] anahtarları BAŞTA "/" İLE (mutlak) verilir - aksi halde <base
+         href="/admin/"> ile birleşip göreli bir yol (ör. "admin-assets/css/...") tarayıcıda
+         YANLIŞ ŞEKİLDE "/admin/admin-assets/css/..." olarak çözülür (gerçek dosya konumu
+         "/admin-assets/..."dir) - bu, canlı tarayıcıda CSS/JS'in HİÇ yüklenmediği gerçek bir
+         hataydı, sunucu tarafı "bu URL 200 dönüyor mu" kontrolü bunu YAKALAYAMAMIŞTI (yalnızca
+         mutlak URL'ler test edilmişti, tarayıcının base href ile göreli yolu NASIL çözdüğü değil). -->
+    <script src="@Assets["/admin-assets/js/layout.js"]"></script>
+    <link rel="stylesheet" href="@Assets["/admin-assets/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["/admin-assets/css/icons.min.css"]" />
+    <link rel="stylesheet" href="@Assets["/admin-assets/css/app.min.css"]" />
+    <link rel="stylesheet" href="@Assets["/admin-assets/css/custom.min.css"]" />
+    <link rel="stylesheet" href="@Assets["/admin-app.css"]" />
+    <link rel="stylesheet" href="@Assets["/admin-assets/libs/datatables/css/dataTables.bootstrap5.min.css"]" />
+    <link rel="stylesheet" href="@Assets["/Dekorras.Storefront.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" type="image/png" href="/admin-favicon.png" />
+    <HeadOutlet />
+</head>
+
+<body>
+    <AdminRoutes />
+    <ReconnectModal />
+    <script src="@Assets["/_framework/blazor.web.js"]"></script>
+    <script src="@Assets["/admin-assets/libs/bootstrap/js/bootstrap.bundle.min.js"]"></script>
+    <script src="@Assets["/admin-assets/libs/simplebar/simplebar.min.js"]"></script>
+    <script src="@Assets["/admin-assets/libs/node-waves/waves.min.js"]"></script>
+    <script src="@Assets["/admin-assets/libs/feather-icons/feather.min.js"]"></script>
+    <!-- BannerZoneBuilder.razor için gerekli - bkz. plan "Dinamik Banner Sistemi" ve
+         backend/README.md'deki "önceki bir hata" notu: bu script'ler ÖNCEDEN doğrudan
+         BannerZoneBuilder.razor'ın kendi markup'ı içine konmuştu, bu da Blazor'un istemci-taraflı
+         "enhanced navigation" (aynı uygulama içi <a> tıklamalarında tam sayfa yenilemesi YERİNE
+         DOM'u fetch ile yamalama) ile o sayfaya ULAŞILDIĞINDA hiç ÇALIŞTIRILMAMASINA yol açıyordu
+         (HTML spesifikasyonuna göre innerHTML/fetch-tabanlı DOM ekleme ile gelen <script>'ler
+         otomatik ÇALIŞMAZ - yalnızca tarayıcının kendi HTML parser'ının okuduğu script'ler çalışır).
+         Sonuç: window.Sortable/dekorrasBannerBuilder tanımsız kalıyor, OnAfterRenderAsync'teki İLK
+         JS interop çağrısı JSException fırlatıyor, bu da Blazor Server'da circuit'i FATAL şekilde
+         düşürüyor - tüm sayfadaki HİÇBİR buton (Bootstrap dropdown dahil, ReconnectModal'ın modal
+         diyalog haline gelip tüm tıklamaları TIKAMASI nedeniyle) çalışmaz hale geliyordu. Kalıcı
+         kabuk olan BURADA (AdminApp.razor) yüklenen script'ler, sayfa İLK tam yüklendiğinde BİR KEZ
+         çalışır ve sonraki TÜM enhanced-navigation geçişlerinde DOM'da kalıcı kalır (yalnızca
+         <AdminRoutes /> içeriği değişir, bu <body> kabuğu DEĞİŞMEZ) - tıpkı bootstrap/simplebar/vb.
+         diğer paylaşılan kütüphaneler gibi. -->
+    <script src="@Assets["/admin-assets/libs/sortablejs/Sortable.min.js"]"></script>
+    <script src="@Assets["/js/admin/banner-zone-builder.js"]"></script>
+    <!-- Liste sayfalarının DataTables (jQuery) ile arama/sıralama/sayfalama'ya kavuşturulması için
+         - bkz. plan "Admin Panel Liste Sayfalarını jQuery DataTables'a Çevirme". jQuery İLK KEZ bu
+         admin panelde kullanılıyor (kullanıcının kendi tercihiyle, projenin genel "jQuery yok"
+         kuralından BİLİNÇLİ bir sapma) - DataTables eklentileri jQuery'e bağımlı olduğu için ondan
+         SONRA yüklenmeli. Hepsi BURADA (kalıcı kabukta) yükleniyor - yukarıdaki Sortable/banner-
+         zone-builder ile AYNI "enhanced navigation'dan etkilenmesin" dersi geçerli. -->
+    <script src="@Assets["/admin-assets/libs/jquery/jquery.min.js"]"></script>
+    <script src="@Assets["/admin-assets/libs/datatables/js/jquery.dataTables.min.js"]"></script>
+    <script src="@Assets["/admin-assets/libs/datatables/js/dataTables.bootstrap5.min.js"]"></script>
+    <!-- dataTables.responsive.min.js BİLEREK YÜKLENMİYOR - bkz. datatable.js'teki ayrıntılı yorum:
+         DataTables'ın "responsive" eklentisi dar ekranlarda hücre içeriğini (Blazor'un @onclick ile
+         yönettiği butonlar dahil) KLONLAYARAK ayrı bir DOM'a taşıyordu, bu klonlar Blazor'un olay
+         yönlendirmesine bağlı OLMADIĞI için tıklamalar hiçbir şey yapmıyordu - GERÇEK kullanıcı
+         geri bildirimiyle bulunan bir hataydı ("Anasayfada Göster/Gizle" çalışmıyor). Mevcut
+         Bootstrap `.table-responsive` sarmalayıcısı zaten yatay kaydırmayla aynı sorunu KLONLAMADAN
+         çözüyor. -->
+    <script src="@Assets["/js/admin/datatable.js"]"></script>
+    <script src="@Assets["/admin-assets/js/plugins.js"]"></script>
+    <script src="@Assets["/admin-assets/js/app.js"]"></script>
+</body>
+
+</html>

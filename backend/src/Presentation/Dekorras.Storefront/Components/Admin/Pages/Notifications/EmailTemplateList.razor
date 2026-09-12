@@ -1,0 +1,104 @@
+﻿@page "/admin/notifications/email-templates"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.Notifications.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>E-posta Şablonları</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">E-posta Şablonları</h4>
+    <a class="btn btn-primary" href="/admin/notifications/email-templates/new">+ Yeni Şablon</a>
+</div>
+<p class="text-muted">
+    Konu/İçerikte <code>{{OrderNumber}}</code>, <code>{{CustomerName}}</code>, <code>{{GrandTotal}}</code>
+    yer tutucuları kullanılabilir. Şu an yalnızca <code>OrderConfirmation</code> (sipariş onayı)
+    anahtarı checkout tarafından okunuyor - bu anahtarda bir şablon yoksa dahili bir varsayılan metin
+    kullanılır, checkout ASLA bu yüzden başarısız olmaz. E-posta gönderimi şu an bir SMTP
+    sağlayıcısına GERÇEKTEN bağlı değil, yalnızca sunucu loglarına yazılır (bkz. backend/README.md).
+</p>
+
+@if (_templates is null)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_templates.Count == 0)
+{
+    <p class="text-muted">Henüz bir şablon yok.</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table id="emailTemplatesTable" class="table table-nowrap align-middle mb-0">
+                    <thead><tr><th>Anahtar</th><th>Dil</th><th>Konu</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var template in _templates)
+                        {
+                            <tr>
+                                <td><code>@template.Key</code></td>
+                                <td>@template.LanguageCode</td>
+                                <td>@template.Subject</td>
+                                <td><a class="btn btn-sm btn-outline-secondary" href="/admin/notifications/email-templates/@template.Id">Düzenle</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <DataTableScript TableId="emailTemplatesTable" ReloadToken="_templates" />
+            </div>
+        </div>
+    </div>
+}
+
+<h4 class="mt-5">Gönderim Geçmişi (son 20)</h4>
+@if (_logs is null)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_logs.Count == 0)
+{
+    <p class="text-muted">Henüz bir gönderim kaydı yok.</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table id="notificationLogsTable" class="table table-nowrap align-middle mb-0">
+                    <thead><tr><th>Tarih</th><th>Kanal</th><th>Alıcı</th><th>Şablon</th><th>Durum</th></tr></thead>
+                    <tbody>
+                        @foreach (var log in _logs)
+                        {
+                            <tr>
+                                @* data-order: ISO 8601 - DataTables varsayılan METİN sıralaması "dd.MM.yyyy"
+                                   formatını GÜN'e göre değil karışık sıralardı. *@
+                                <td data-order="@log.SentAtUtc.ToString("o")">@log.SentAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>@log.Channel</td>
+                                <td>@log.Recipient</td>
+                                <td><code>@log.TemplateKey</code></td>
+                                <td>
+                                    <span class="badge @(log.Success ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger")">@(log.Success ? "Başarılı" : "Başarısız")</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <DataTableScript TableId="notificationLogsTable" ReloadToken="_logs" LastColumnIsActions="false" />
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyCollection<EmailTemplateListItemDto>? _templates;
+    private IReadOnlyCollection<NotificationLogDto>? _logs;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _templates = await Sender.Send(new GetEmailTemplatesQuery());
+        _logs = await Sender.Send(new GetRecentNotificationLogsQuery());
+    }
+}

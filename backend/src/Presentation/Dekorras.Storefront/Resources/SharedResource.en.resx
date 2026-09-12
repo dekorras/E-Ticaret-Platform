@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Anasayfa" xml:space="preserve"><value>Home</value></data>
+  <data name="Tümü" xml:space="preserve"><value>All</value></data>
+  <data name="Ürün ara..." xml:space="preserve"><value>Search products...</value></data>
+  <data name="Siparişlerim" xml:space="preserve"><value>My Orders</value></data>
+  <data name="Favorilerim" xml:space="preserve"><value>Wishlist</value></data>
+  <data name="Çıkış Yap" xml:space="preserve"><value>Log Out</value></data>
+  <data name="Giriş Yap" xml:space="preserve"><value>Log In</value></data>
+  <data name="Üye Ol" xml:space="preserve"><value>Register</value></data>
+  <data name="Sepetim" xml:space="preserve"><value>My Cart</value></data>
+  <data name="Gizlilik Politikası" xml:space="preserve"><value>Privacy Policy</value></data>
+  <data name="Dil" xml:space="preserve"><value>Language</value></data>
+  <data name="Gösterilecek ürün bulunamadı." xml:space="preserve"><value>No products to display.</value></data>
+  <data name="Görsel Yok" xml:space="preserve"><value>No Image</value></data>
+  <data name="(KDV %{0} dahil değil)" xml:space="preserve"><value>(VAT %{0} excluded)</value></data>
+  <data name="Stokta Var" xml:space="preserve"><value>In Stock</value></data>
+  <data name="Stokta Yok" xml:space="preserve"><value>Out of Stock</value></data>
+  <data name="Ürünler" xml:space="preserve"><value>Products</value></data>
+  <data name="Söve, duvar kaplaması, duvar kağıdı, taş desen panel, kartonpiyer ve poster." xml:space="preserve"><value>Door/window casings, wall cladding, wallpaper, stone-pattern panels, cornices and posters.</value></data>
+  <data name="Sepetiniz boş." xml:space="preserve"><value>Your cart is empty.</value></data>
+  <data name="Alışverişe Devam Et" xml:space="preserve"><value>Continue Shopping</value></data>
+  <data name="Ürün" xml:space="preserve"><value>Product</value></data>
+  <data name="Birim Fiyat" xml:space="preserve"><value>Unit Price</value></data>
+  <data name="Adet" xml:space="preserve"><value>Quantity</value></data>
+  <data name="Ara Toplam" xml:space="preserve"><value>Subtotal</value></data>
+  <data name="Güncelle" xml:space="preserve"><value>Update</value></data>
+  <data name="Kaldır" xml:space="preserve"><value>Remove</value></data>
+  <data name="Kupon Kodu" xml:space="preserve"><value>Coupon Code</value></data>
+  <data name="Uygula" xml:space="preserve"><value>Apply</value></data>
+  <data name="Ödemeye Geç" xml:space="preserve"><value>Proceed to Checkout</value></data>
+  <data name="Kampanya İndirimi ({0})" xml:space="preserve"><value>Campaign Discount ({0})</value></data>
+  <data name="Kupon ({0}) İndirimi" xml:space="preserve"><value>Coupon ({0}) Discount</value></data>
+  <data name="Toplam" xml:space="preserve"><value>Total</value></data>
+  <data name="Hediye Çeki ({0})" xml:space="preserve"><value>Gift Voucher ({0})</value></data>
+  <data name="Hediye Çeki Kodu" xml:space="preserve"><value>Gift Voucher Code</value></data>
+  <data name="Para Birimi" xml:space="preserve"><value>Currency</value></data>
+  <data name="Sepete Ekle" xml:space="preserve"><value>Add to Cart</value></data>
+  <data name="Karşılaştır" xml:space="preserve"><value>Compare</value></data>
+  <data name="Karşılaştırmadan Çıkar" xml:space="preserve"><value>Remove from Comparison</value></data>
+</root>

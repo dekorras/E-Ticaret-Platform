@@ -1,0 +1,82 @@
+@using Dekorras.Application.Catalog.Storefront
+@using Dekorras.Domain.Catalog
+@model StorefrontProductDetailDto
+@{
+    var unitLabel = Model.UnitOfMeasure switch
+    {
+        UnitOfMeasure.SquareMeter => "m²",
+        UnitOfMeasure.LinearMeter => "mt",
+        _ => "adet"
+    };
+    var (stockBadgeClass, stockLabel) = Model.StockAvailability switch
+    {
+        StockAvailability.InStock => ("bg-success", "Stokta Var"),
+        StockAvailability.PreOrder => ("bg-info", "Ön Sipariş"),
+        StockAvailability.ArrivesInDays => ("bg-warning text-dark", "2-3 Gün İçinde Kargoda"),
+        _ => ("bg-secondary", "Stokta Yok")
+    };
+    var canOrder = Model.StockAvailability != StockAvailability.OutOfStock;
+}
+
+<div class="row g-3">
+    <div class="col-md-6">
+        @if (Model.ImageUrls.Count > 0)
+        {
+            <img src="@Model.ImageUrls.First()" class="img-fluid rounded" alt="@Model.Name" />
+        }
+        else
+        {
+            <div class="d-flex align-items-center justify-content-center bg-light text-muted rounded" style="height: 260px;">Görsel Yok</div>
+        }
+    </div>
+    <div class="col-md-6">
+        <h4 class="dk-heading">@Model.Name</h4>
+        <p class="text-muted small mb-2">Ürün Kodu: @Model.ProductCode</p>
+
+        @if (Model.PricesVisible)
+        {
+            <p class="fs-4 fw-bold mb-1">@Html.Money(Model.PriceTry) <small class="text-muted fs-6">/ @unitLabel</small></p>
+        }
+        else
+        {
+            <p class="fs-5 fw-bold text-muted">Fiyat için bizimle iletişime geçin</p>
+        }
+
+        <span class="badge @stockBadgeClass mb-2">@stockLabel</span>
+
+        @if (canOrder && Model.PricesVisible)
+        {
+            <form asp-controller="Cart" asp-action="Add" method="post" class="mt-2">
+                <input type="hidden" name="productId" value="@Model.Id" />
+                <input type="hidden" name="returnUrl" value="@ViewBag.ReturnUrl" />
+                @if (Model.Variants.Count > 0)
+                {
+                    <div class="mb-2">
+                        <label class="form-label small">Seçenek</label>
+                        <select name="variantId" class="form-select form-select-sm">
+                            @foreach (var variant in Model.Variants)
+                            {
+                                <option value="@variant.Id">@variant.OptionName</option>
+                            }
+                        </select>
+                    </div>
+                }
+                <div class="input-group input-group-sm mb-2" style="max-width: 160px;">
+                    <input type="number" name="quantity" value="@Model.MinimumOrderQuantity" min="@Model.MinimumOrderQuantity" class="form-control" />
+                    <span class="input-group-text">@unitLabel</span>
+                </div>
+                <button type="submit" class="btn btn-primary">Sepete Ekle</button>
+            </form>
+        }
+        else if (!Model.PricesVisible)
+        {
+            <p class="text-muted small">Bu ürünün fiyatını görmek ve satın almak için bizimle iletişime geçin.</p>
+        }
+
+        <p class="mt-3">
+            <a class="small" asp-controller="Product" asp-action="Details" asp-route-slug="@Model.Slug">
+                Tüm ürün detaylarını gör <i class="bi bi-arrow-right"></i>
+            </a>
+        </p>
+    </div>
+</div>

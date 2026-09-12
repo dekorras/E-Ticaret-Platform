@@ -1,0 +1,45 @@
+﻿@page "/admin/system/roles/new"
+@attribute [Authorize(Policy = "SysAdminOnly")]
+@rendermode InteractiveServer
+@using Dekorras.Application.SystemAdmin.Commands
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Rol</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Rol</h4>
+</div>
+
+<div class="card" style="max-width: 500px;">
+    <div class="card-body">
+        <div class="mb-2">
+            <label class="form-label">Ad</label>
+            <input class="form-control" @bind="_newRoleName" placeholder="ör. Muhasebeci" />
+        </div>
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+        <button class="btn btn-success" @onclick="CreateRoleAsync">Oluştur</button>
+        <a class="btn btn-secondary ms-2" href="/admin/system/roles">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private string _newRoleName = "";
+    private string? _errorMessage;
+
+    private async Task CreateRoleAsync()
+    {
+        try
+        {
+            await Sender.Send(new CreateRoleCommand(_newRoleName));
+            NavigationManager.NavigateTo("/admin/system/roles");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+}

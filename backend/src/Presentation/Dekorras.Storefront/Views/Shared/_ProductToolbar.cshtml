@@ -1,0 +1,28 @@
+@using Dekorras.Storefront.Models
+@model ProductListingViewModel
+
+@* Ürün listeleme sayfalarının (Kategori/Arama) üst araç çubuğu: solda sayfalama, sağda
+   Bootstrap grid mantığıyla (bkz. product-grid.css) sütun sayısı (2/3/4) ve liste/ızgara görünüm
+   anahtarı - kullanıcının isteği (bkz. backend/README.md). Gerçek davranış `product-view.js`
+   tarafından yönetilir; JS çalışmazsa sayfa varsayılan 3 sütunlu ızgara görünümünde kalır (kademeli
+   bozulma - bkz. bu projenin `infinite-scroll.js`/`_Pagination` geri düşüş kalıbıyla AYNI ilke). *@
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2" data-dk-product-toolbar>
+    <div data-dk-pagination-fallback>
+        @await Html.PartialAsync("_Pagination", Model)
+    </div>
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div class="btn-group btn-group-sm" role="group" aria-label="@Localizer["Sütun sayısı"]" data-dk-cols-group>
+            <button type="button" class="btn btn-outline-secondary" data-dk-cols="2">2</button>
+            <button type="button" class="btn btn-outline-secondary active" data-dk-cols="3">3</button>
+            <button type="button" class="btn btn-outline-secondary" data-dk-cols="4">4</button>
+        </div>
+        <div class="btn-group btn-group-sm" role="group" aria-label="@Localizer["Görünüm"]">
+            <button type="button" class="btn btn-outline-secondary active" data-dk-view="grid" title="@Localizer["Izgara Görünümü"]">
+                <i class="bi bi-grid-3x3-gap-fill"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-dk-view="list" title="@Localizer["Liste Görünümü"]">
+                <i class="bi bi-list-ul"></i>
+            </button>
+        </div>
+    </div>
+</div>

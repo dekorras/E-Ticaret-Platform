@@ -1,0 +1,332 @@
+@using Dekorras.Application.Catalog.Storefront
+@using Dekorras.Domain.Catalog
+@using Dekorras.Storefront.Models
+@model ProductDetailViewModel
+@section Styles {
+    <link rel="stylesheet" href="~/css/product-detail.css" asp-append-version="true" />
+}
+@{
+    var product = Model.Product;
+    var imageUrls = product.ImageUrls.ToList();
+    ViewData["Title"] = string.IsNullOrWhiteSpace(product.MetaTitle) ? product.Name : product.MetaTitle;
+    ViewData["MetaDescription"] = product.MetaDescription;
+    ViewData["MetaKeywords"] = product.MetaKeywords;
+    ViewData["MetaRobots"] = product.MetaRobots;
+
+    var unitLabel = product.UnitOfMeasure switch
+    {
+        UnitOfMeasure.SquareMeter => "m²",
+        UnitOfMeasure.LinearMeter => "mt",
+        _ => "adet"
+    };
+
+    // Bkz. plan §2.4 - "Stok Dışı Durumu (2-3 gün içinde / Ön Sipariş / Stokta var / Stokta yok)".
+    // Yalnızca gerçekten TÜKENMİŞ (OutOfStock) bir ürün Sepete Ekle'yi gizler - Ön Sipariş/2-3 gün
+    // içinde durumları hâlâ sipariş verilebilir kabul edilir (gerçek e-ticaret sitelerindeki yaygın
+    // davranış).
+    var (stockBadgeClass, stockLabel) = product.StockAvailability switch
+    {
+        StockAvailability.InStock => ("bg-success", "Stokta Var"),
+        StockAvailability.PreOrder => ("bg-info", "Ön Sipariş"),
+        StockAvailability.ArrivesInDays => ("bg-warning text-dark", "2-3 Gün İçinde Kargoda"),
+        _ => ("bg-secondary", "Stokta Yok")
+    };
+    var canOrder = product.StockAvailability != StockAvailability.OutOfStock;
+}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">@Localizer["Anasayfa"]</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@product.Name</li>
+    </ol>
+</nav>
+
+<div class="row">
+    <div class="col-md-8">
+        @if (imageUrls.Count > 0)
+        {
+            <div class="dk-gallery" data-dk-gallery>
+                <div class="dk-gallery-main" data-dk-gallery-main>
+                    <img id="dkMainImage" src="@imageUrls[0]" alt="@product.Name" />
+                    <span class="dk-gallery-zoom-hint"><i class="bi bi-zoom-in"></i></span>
+                </div>
+                @if (imageUrls.Count > 1)
+                {
+                    <div class="dk-gallery-thumbs">
+                        @for (var i = 0; i < imageUrls.Count; i++)
+                        {
+                            <button type="button" class="dk-gallery-thumb @(i == 0 ? "is-active" : "")" data-full="@imageUrls[i]">
+                                <img src="@imageUrls[i]" alt="@product.Name" loading="lazy" />
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="dk-gallery-placeholder mb-3">@Localizer["Görsel Yok"]</div>
+        }
+        <h1 class="h3">@product.Name</h1>
+        @if (product.ReviewCount > 0)
+        {
+            var fullStars = (int)Math.Round(product.AverageRating ?? 0);
+            <p>
+                <span class="text-warning">
+                    @for (var i = 0; i < 5; i++)
+                    {
+                        <i class="bi @(i < fullStars ? "bi-star-fill" : "bi-star")"></i>
+                    }
+                </span>
+                <span class="text-muted">@product.AverageRating!.Value.ToString("0.0") (@product.ReviewCount değerlendirme)</span>
+            </p>
+        }
+        @if (product.BrandName is not null)
+        {
+            <p class="text-muted">Marka: @product.BrandName</p>
+        }
+        <p class="text-muted">Ürün Kodu: @product.ProductCode</p>
+
+        @if (!string.IsNullOrWhiteSpace(product.Description))
+        {
+            <div class="mt-3">@Html.Raw(product.Description)</div>
+        }
+
+        @if (product.Videos.Count > 0)
+        {
+            <div class="mt-3">
+                <h5 class="h6">Ürün Videoları</h5>
+                <ul class="list-unstyled">
+                    @foreach (var video in product.Videos)
+                    {
+                        <li><a href="@video.Url" target="_blank" rel="noopener">@(video.Title ?? video.Url)</a></li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (product.Attributes.Count > 0)
+        {
+            <table class="table table-sm mt-3" style="max-width: 500px;">
+                <tbody>
+                    @foreach (var spec in product.Attributes)
+                    {
+                        <tr>
+                            <th class="text-muted" style="width: 40%;">@spec.Name</th>
+                            <td>@spec.Value</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                @if (product.PricesVisible)
+                {
+                    <p class="fs-4 fw-bold">@Html.Money(product.PriceTry) <small class="text-muted fs-6">/ @unitLabel</small></p>
+                    <p class="text-muted">KDV %@product.TaxRatePercentage.ToString("0") hariçtir.</p>
+                }
+                else
+                {
+                    <p class="fs-4 fw-bold text-muted">Fiyat için bizimle iletişime geçin</p>
+                }
+
+                <span class="badge @stockBadgeClass mb-2">@stockLabel</span>
+
+                @if (product.MinimumOrderQuantity > 1)
+                {
+                    <p class="small text-muted">Asgari satış adedi: @product.MinimumOrderQuantity @unitLabel</p>
+                }
+
+                @if (canOrder && product.PricesVisible)
+                {
+                    <form asp-controller="Cart" asp-action="Add" method="post">
+                        <input type="hidden" name="productId" value="@product.Id" />
+                        <input type="hidden" name="returnUrl" value="@Url.Action("Details", "Product", new { slug = product.Slug })" />
+                        @if (product.Variants.Count > 0)
+                        {
+                            <div class="mb-2">
+                                <label class="form-label small">Seçenek</label>
+                                <select name="variantId" class="form-select">
+                                    @foreach (var variant in product.Variants)
+                                    {
+                                        var adjustmentLabel = variant.PriceAdjustmentTry is decimal adj and not 0
+                                            ? $" ({(adj > 0 ? "+" : "")}{Html.MoneyText(adj)})"
+                                            : "";
+                                        <option value="@variant.Id">@variant.OptionName@adjustmentLabel</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        <div class="input-group mb-2">
+                            <input type="number" name="quantity" value="@product.MinimumOrderQuantity" min="@product.MinimumOrderQuantity" class="form-control" />
+                            <span class="input-group-text">@unitLabel</span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary w-50">Sepete Ekle</button>
+                            <button type="submit" formaction="@Url.Action("BuyNow", "Cart")" class="btn btn-outline-primary w-50">Hemen Al</button>
+                        </div>
+                    </form>
+                }
+                else if (!product.PricesVisible)
+                {
+                    <p class="text-muted small">Bu ürünün fiyatını görmek ve satın almak için bizimle iletişime geçin.</p>
+                }
+                else
+                {
+                    <button class="btn btn-primary w-100" disabled>Stokta Yok</button>
+                }
+
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <form asp-controller="Product" asp-action="ToggleWishlist" method="post" class="mt-2">
+                        <input type="hidden" name="productId" value="@product.Id" />
+                        <input type="hidden" name="slug" value="@product.Slug" />
+                        <input type="hidden" name="add" value="@(!Model.IsInWishlist)" />
+                        @if (Model.IsInWishlist)
+                        {
+                            <button type="submit" class="btn btn-outline-danger w-100"><i class="bi bi-heart-fill"></i> Favorilerden Çıkar</button>
+                        }
+                        else
+                        {
+                            <button type="submit" class="btn btn-outline-secondary w-100"><i class="bi bi-heart"></i> Favorilere Ekle</button>
+                        }
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-8">
+        <h3 class="h5">Değerlendirmeler (@Model.Reviews.Count)</h3>
+
+        @if (Model.Reviews.Count == 0)
+        {
+            <p class="text-muted">Bu ürün için henüz bir değerlendirme yapılmamış.</p>
+        }
+        else
+        {
+            @foreach (var review in Model.Reviews)
+            {
+                <div class="border-bottom pb-2 mb-2">
+                    <div>
+                        <span class="text-warning">
+                            @for (var i = 0; i < 5; i++)
+                            {
+                                <i class="bi @(i < review.Rating ? "bi-star-fill" : "bi-star")"></i>
+                            }
+                        </span>
+                        <strong class="ms-1">@review.CustomerName</strong>
+                        <span class="text-muted small">@review.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</span>
+                    </div>
+                    <p class="mb-0">@review.Comment</p>
+                </div>
+            }
+        }
+
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <form asp-controller="Product" asp-action="SubmitReview" method="post" class="mt-3" style="max-width: 500px;">
+                <input type="hidden" name="productId" value="@product.Id" />
+                <input type="hidden" name="slug" value="@product.Slug" />
+                <div class="mb-2">
+                    <label class="form-label">Puan</label>
+                    <select name="rating" class="form-select">
+                        <option value="5">5 - Mükemmel</option>
+                        <option value="4">4 - İyi</option>
+                        <option value="3">3 - Orta</option>
+                        <option value="2">2 - Zayıf</option>
+                        <option value="1">1 - Kötü</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Yorumunuz</label>
+                    <textarea name="comment" class="form-control" rows="3" required></textarea>
+                </div>
+                @if (Model.ReviewError is not null)
+                {
+                    <p class="text-danger">@Model.ReviewError</p>
+                }
+                <button type="submit" class="btn btn-outline-primary btn-sm">Değerlendirme Gönder</button>
+            </form>
+        }
+        else
+        {
+            <p class="text-muted mt-2"><a asp-controller="Account" asp-action="Login">Giriş yapın</a>, bu ürünü değerlendirebilirsiniz.</p>
+        }
+
+        <hr class="my-4" />
+
+        <h3 class="h5">Soru & Cevap (@Model.Questions.Count)</h3>
+
+        @if (Model.Questions.Count == 0)
+        {
+            <p class="text-muted">Bu ürün için henüz yanıtlanmış bir soru yok.</p>
+        }
+        else
+        {
+            @foreach (var question in Model.Questions)
+            {
+                <div class="border-bottom pb-2 mb-2">
+                    <p class="mb-1"><strong>S:</strong> @question.Question</p>
+                    <p class="mb-0 text-muted"><strong>C:</strong> @question.Answer</p>
+                </div>
+            }
+        }
+
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <form asp-controller="Product" asp-action="SubmitQuestion" method="post" class="mt-3" style="max-width: 500px;">
+                <input type="hidden" name="productId" value="@product.Id" />
+                <input type="hidden" name="slug" value="@product.Slug" />
+                <div class="mb-2">
+                    <label class="form-label">Sorunuz</label>
+                    <textarea name="question" class="form-control" rows="2" required></textarea>
+                </div>
+                @if (Model.QuestionError is not null)
+                {
+                    <p class="text-danger">@Model.QuestionError</p>
+                }
+                <button type="submit" class="btn btn-outline-primary btn-sm">Soru Sor</button>
+            </form>
+        }
+        else
+        {
+            <p class="text-muted mt-2"><a asp-controller="Account" asp-action="Login">Giriş yapın</a>, ürün hakkında soru sorabilirsiniz.</p>
+        }
+    </div>
+</div>
+
+@if (Model.RelatedProducts is { Count: > 0 })
+{
+    <div class="row mt-5">
+        <div class="col-12">
+            <h3 class="h5 mb-3">Benzer Ürünler</h3>
+            @await Html.PartialAsync("_ProductGrid", Model.RelatedProducts)
+        </div>
+    </div>
+}
+
+@if (imageUrls.Count > 0)
+{
+    <div class="modal fade" id="dkImageZoomModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down modal-lg">
+            <div class="modal-content bg-dark">
+                <div class="modal-header border-0">
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body d-flex align-items-center justify-content-center">
+                    <img id="dkImageZoomModalImg" src="" class="img-fluid" alt="@product.Name" />
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/product-zoom.js" asp-append-version="true"></script>
+}

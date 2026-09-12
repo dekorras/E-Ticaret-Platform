@@ -1,0 +1,152 @@
+﻿@page "/admin/ecommerce/customers/{Id:guid}"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Customers.Commands
+@using Dekorras.Application.Customers.Queries
+@using Dekorras.Domain.Ordering
+@using Dekorras.Storefront.Components.Admin.Pages.Ordering
+@inject MediatR.ISender Sender
+
+<PageTitle>Müşteri: @_customer?.FullName</PageTitle>
+
+@if (_customer is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <a class="btn btn-secondary mb-3" href="/admin/ecommerce/customers">← Müşteri Listesi</a>
+    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+        <h4 class="mb-sm-0">@_customer.FullName</h4>
+    </div>
+    <p>
+        @_customer.Email @if (_customer.PhoneNumber is not null) { <text> · @_customer.PhoneNumber</text> }
+        @if (_customer.IsGuest)
+        {
+            <span class="badge bg-secondary-subtle text-secondary ms-2">Misafir</span>
+        }
+        else
+        {
+            <span class="badge bg-info-subtle text-info ms-2">Üye</span>
+        }
+        <span class="badge @(_customer.IsActive ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary") ms-1">@(_customer.IsActive ? "Aktif" : "Pasif")</span>
+    </p>
+    <p class="text-muted">Kayıt: @_customer.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</p>
+
+    <div class="mb-3 d-flex align-items-center gap-2">
+        <label class="form-label mb-0">Müşteri Grubu:</label>
+        @if (_groups is not null)
+        {
+            <select class="form-select form-select-sm" style="max-width: 220px;" value="@_selectedGroupId" @onchange="OnGroupSelectedAsync">
+                @foreach (var group in _groups)
+                {
+                    <option value="@group.Id">@group.Name</option>
+                }
+            </select>
+        }
+    </div>
+
+    @if (_customer.IsActive)
+    {
+        <button class="btn btn-outline-warning btn-sm mb-3" @onclick="() => ToggleActiveAsync(false)">Pasife Al</button>
+    }
+    else
+    {
+        <button class="btn btn-outline-success btn-sm mb-3" @onclick="() => ToggleActiveAsync(true)">Aktifleştir</button>
+    }
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Adresler</h5>
+                    @if (_customer.Addresses.Count == 0)
+                    {
+                        <p class="text-muted">Kayıtlı adres yok.</p>
+                    }
+                    else
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var address in _customer.Addresses)
+                            {
+                                <li class="list-group-item">
+                                    @address.RecipientName<br />
+                                    @address.AddressLine1<br />
+                                    @address.City, @address.CountryCode<br />
+                                    @address.PhoneNumber
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Siparişler (@_customer.Orders.Count)</h5>
+                    @if (_customer.Orders.Count == 0)
+                    {
+                        <p class="text-muted">Henüz sipariş yok.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive table-card">
+                            <table class="table table-nowrap align-middle mb-0">
+                                <thead><tr><th>Sipariş No</th><th>Tarih</th><th>Tutar</th><th>Durum</th></tr></thead>
+                                <tbody>
+                                    @foreach (var order in _customer.Orders)
+                                    {
+                                        <tr>
+                                            <td><a href="/admin/ecommerce/orders/@order.Id">@order.OrderNumber</a></td>
+                                            <td>@order.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                                            <td>@order.GrandTotalTry.ToString("N2") ₺</td>
+                                            <td>@OrderList.StatusLabel(order.Status)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private CustomerDetailDto? _customer;
+    private IReadOnlyCollection<Dekorras.Application.Customers.Queries.CustomerGroupDto>? _groups;
+    private Guid _selectedGroupId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _groups = await Sender.Send(new Dekorras.Application.Customers.Queries.GetCustomerGroupsQuery());
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _customer = await Sender.Send(new GetCustomerDetailQuery(Id));
+        if (_customer is not null) _selectedGroupId = _customer.CustomerGroupId;
+    }
+
+    private async Task ToggleActiveAsync(bool isActive)
+    {
+        await Sender.Send(new SetCustomerActiveCommand(Id, isActive));
+        await LoadAsync();
+    }
+
+    private async Task OnGroupSelectedAsync(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var groupId))
+        {
+            await Sender.Send(new SetCustomerGroupCommand(Id, groupId));
+            await LoadAsync();
+        }
+    }
+}

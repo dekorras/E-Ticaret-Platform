@@ -1,0 +1,11 @@
+@{
+    ViewData["Title"] = "Siparişiniz Alındı";
+    var orderNumber = (string)ViewBag.OrderNumber;
+}
+
+<div class="text-center py-5">
+    <h1 class="h3">Teşekkürler!</h1>
+    <p>Siparişiniz alındı. Sipariş numaranız: <strong>@orderNumber</strong></p>
+    <p class="text-muted">Siparişiniz "Onay Bekliyor" durumundadır; ekibimiz en kısa sürede sizinle iletişime geçecektir.</p>
+    <a class="btn btn-primary mt-3" asp-controller="Home" asp-action="Index">Alışverişe Devam Et</a>
+</div>

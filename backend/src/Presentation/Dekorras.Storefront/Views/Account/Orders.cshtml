@@ -1,0 +1,54 @@
+@using Dekorras.Application.Ordering.Storefront
+@using Dekorras.Domain.Ordering
+@model IReadOnlyCollection<MyOrderListItemDto>
+@{
+    ViewData["Title"] = "Siparişlerim";
+
+    static string StatusLabel(OrderStatus status) => status switch
+    {
+        OrderStatus.PendingApproval => "Onay Bekliyor",
+        OrderStatus.Preparing => "Hazırlanıyor",
+        OrderStatus.Prepared => "Hazırlandı",
+        OrderStatus.Shipped => "Kargoya Verildi",
+        OrderStatus.Completed => "Tamamlandı",
+        OrderStatus.Cancelled => "İptal Edildi",
+        OrderStatus.Refunded => "İade Edildi",
+        _ => status.ToString()
+    };
+}
+
+<h1 class="h3 mb-3">Siparişlerim</h1>
+
+@if (Model.Count == 0)
+{
+    <p class="text-muted">Henüz bir siparişiniz yok.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Sipariş No</th>
+                <th>Tarih</th>
+                <th>Tutar</th>
+                <th>Durum</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in Model)
+            {
+                <tr>
+                    <td>@order.OrderNumber</td>
+                    <td>@order.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                    @* Geçmiş siparişler bilinçli olarak HER ZAMAN TL gösterir, seçili görüntüleme para birimine
+                       çevrilmez - GERÇEKTEN tahsil edilen tutar budur, o günkü kurla değil BUGÜNKÜ kurla
+                       "yaklaşık" bir tutar göstermek yanıltıcı olurdu (bkz. Checkout'taki dönüşüm notu). *@
+                    <td>@order.GrandTotalTry.ToString("N2") ₺</td>
+                    <td>@StatusLabel(order.Status)</td>
+                    <td><a class="btn btn-sm btn-outline-primary" asp-action="OrderDetail" asp-route-id="@order.Id">Detay</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

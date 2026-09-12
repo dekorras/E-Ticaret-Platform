@@ -1,0 +1,34 @@
+@using Dekorras.Storefront.Models
+@model ProductListingViewModel
+@{
+    // Category "slug" sorgu parametresiyle, Search "q" ile çalışır - ikisi de {controller}/IndexPartial
+    // eylemine gider (bkz. plan §6). ViewData["InfiniteScrollController"] çağıran view tarafından
+    // ayarlanır (Category/Search Index.cshtml).
+    var controllerName = (string)ViewData["InfiniteScrollController"]!;
+
+    string BuildPartialBaseUrl()
+    {
+        var parameters = new List<string>();
+        if (Context.Request.Query["slug"].Count > 0) parameters.Add($"slug={Uri.EscapeDataString(Context.Request.Query["slug"].ToString())}");
+        if (Context.Request.Query["q"].Count > 0) parameters.Add($"q={Uri.EscapeDataString(Context.Request.Query["q"].ToString())}");
+        if (Model.MinPriceTry is not null) parameters.Add($"minPrice={Model.MinPriceTry}");
+        if (Model.MaxPriceTry is not null) parameters.Add($"maxPrice={Model.MaxPriceTry}");
+        if (Model.BrandId is not null) parameters.Add($"brandId={Model.BrandId}");
+        parameters.Add($"sort={Model.SortBy}");
+        parameters.Add($"pageSize={Model.PageSize}");
+
+        return Url.Action("IndexPartial", controllerName) + "?" + string.Join('&', parameters);
+    }
+}
+
+@* Sayfalama artık BURADA değil, sayfanın üstündeki `_ProductToolbar` içinde gösteriliyor (kullanıcı
+   isteği: "1. alanda sayfalama görünsün" - bkz. Views/Category|Search/Index.cshtml). Aşağıdaki
+   `[data-dk-infinite]` mantığı DEĞİŞMEDİ - `infinite-scroll.js` yine `[data-dk-pagination-fallback]`
+   seçicisiyle üstteki toolbar'ın içindeki sayfalamayı bulup gizliyor. *@
+<div data-dk-infinite data-partial-url="@BuildPartialBaseUrl()" data-page="@Model.Page" data-total-pages="@Model.TotalPages">
+    @await Html.PartialAsync("_ProductGrid", Model.Products)
+    <div data-dk-infinite-sentinel aria-hidden="true"></div>
+    <div class="text-center py-3 d-none" data-dk-infinite-loading>
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+    </div>
+</div>

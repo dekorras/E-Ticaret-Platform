@@ -1,0 +1,9 @@
+@using Dekorras.Application.Content.Queries
+@model CmsPageDetailDto
+@{
+    ViewData["Title"] = string.IsNullOrWhiteSpace(Model.MetaTitle) ? Model.Title : Model.MetaTitle;
+    ViewData["MetaDescription"] = Model.MetaDescription;
+}
+
+<h1 class="h3 mb-3">@Model.Title</h1>
+<div class="dk-cms-content">@Html.Raw(Model.ContentHtml)</div>

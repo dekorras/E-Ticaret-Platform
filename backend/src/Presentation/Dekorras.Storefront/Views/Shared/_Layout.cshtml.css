@@ -1,0 +1,4 @@
+/* Eski `dotnet new mvc` iskeletinin varsayılan kuralları buradan kaldırıldı - hepsi
+   wwwroot/css/base.css ve layout.css içinde (kapsamsız, tüm sayfalarda geçerli) marka
+   token'larıyla YENİDEN tanımlandı. Bu dosya CSS isolation mekanizması için (bkz. SDK belgeleri)
+   hâlâ gerekli, ama artık kasıtlı olarak boş. */

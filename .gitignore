@@ -1,0 +1,27 @@
+# .NET derleme çıktıları
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# Gerçek yerel gizli bilgiler (bkz. backend/README.md "Kurulum") - appsettings.json'un kendisi
+# yalnızca güvenli/sahte varsayılan değerler içerir, GERÇEK yerel bağlantı dizesi buraya konur.
+appsettings.Development.json
+appsettings.*.local.json
+*.pfx
+
+# Claude Code oturum/araç verisi - projeye ait değil, yerel makineye özel.
+.claude/
+
+# Bu depoya AİT olmayan, salt referans amaçlı vendored/scratch klasörler (üçüncü taraf şablon
+# kaynakları + dekorras.com site aynası + geçici ekran görüntüleri) - GERÇEK proje kodu `backend/`
+# altında. Bazıları (ör. front-end-demo) tek başına GitHub'ın push sınırlarını aşacak kadar büyük.
+admin-demo/
+front-end-demo/
+hata/
+Publish/
+
+# IDE
+.idea/

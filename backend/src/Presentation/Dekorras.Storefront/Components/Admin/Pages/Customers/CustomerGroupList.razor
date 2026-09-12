@@ -1,0 +1,69 @@
+﻿@page "/admin/ecommerce/customer-groups"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Customers.Commands
+@using Dekorras.Application.Customers.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>Müşteri Grupları</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Müşteri Grupları</h4>
+</div>
+<p class="text-muted">
+    Bkz. plan §2.6 - "müşteri grupları: ... ürün fiyatlarını sadece belirli gruplara gösterme
+    opsiyonu mevcut". Bir grubun fiyat gösterimi kapatılırsa, o gruba üye MÜŞTERİLER (misafirler
+    HER ZAMAN fiyatı görür) ürün listesi/detayında fiyat yerine "bizimle iletişime geçin" mesajı
+    görür ve sepete ekleyemez.
+</p>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive table-card">
+            <table id="customerGroupsTable" class="table table-nowrap align-middle mb-0" style="max-width: 600px;">
+                <thead><tr><th>Grup Adı</th><th>Storefront'ta Fiyat Göster</th><th></th></tr></thead>
+                <tbody>
+                    @if (_groups is not null)
+                    {
+                        @foreach (var group in _groups)
+                        {
+                            <tr>
+                                <td>@group.Name</td>
+                                <td>
+                                    <span class="badge @(group.ShowPricesOnStorefront ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")">
+                                        @(group.ShowPricesOnStorefront ? "Gösteriliyor" : "Gizli")
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (group.ShowPricesOnStorefront)
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => ToggleAsync(group.Id, false)">Fiyatı Gizle</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-success" @onclick="() => ToggleAsync(group.Id, true)">Fiyatı Göster</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+            <DataTableScript TableId="customerGroupsTable" ReloadToken="_groups" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyCollection<CustomerGroupDto>? _groups;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _groups = await Sender.Send(new GetCustomerGroupsQuery());
+
+    private async Task ToggleAsync(Guid id, bool showPrices)
+    {
+        await Sender.Send(new SetCustomerGroupShowPricesCommand(id, showPrices));
+        await LoadAsync();
+    }
+}

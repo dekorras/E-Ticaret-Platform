@@ -1,0 +1,341 @@
+@inject MediatR.ISender Sender
+@using Dekorras.Application.Common
+@using Dekorras.Application.Content.Queries
+@using Dekorras.Application.Localization.Queries
+@using Dekorras.Application.SystemAdmin.Queries
+@{
+    var currentLanguage = StorefrontLanguage.GetLanguage(Context);
+    var isRtl = StorefrontLanguage.IsRtl(currentLanguage);
+    var currentCurrencyCode = ViewData["CurrencyCode"] as string ?? StorefrontCurrency.DefaultCurrencyCode;
+    var activeCurrencies = await Sender.Send(new GetActiveCurrenciesQuery());
+    var compareCount = StorefrontCompareList.GetProductIds(Context).Count;
+    var contactSettings = await Sender.Send(new GetSettingsQuery(ContactSettingKeys.All));
+    var phoneNumber = contactSettings.FirstOrDefault(s => s.Key == ContactSettingKeys.PhoneNumber)?.Value;
+    var whatsAppUrl = contactSettings.FirstOrDefault(s => s.Key == ContactSettingKeys.WhatsAppUrl)?.Value;
+    var instagramUrl = contactSettings.FirstOrDefault(s => s.Key == ContactSettingKeys.InstagramUrl)?.Value;
+    var telegramUrl = contactSettings.FirstOrDefault(s => s.Key == ContactSettingKeys.TelegramUrl)?.Value;
+    var recentBlogPosts = (await Sender.Send(new GetPublishedBlogPostsQuery(currentLanguage))).Take(3).ToList();
+    // Header'ın (üst bilgi çubuğu + logo/arama/hesap satırı + mega menü) "container" davranışı artık
+    // yönetim panelinden (/admin/settings/layout) yönetilebiliyor - bkz. LayoutSettingKeys. Varsayılan
+    // "fluid" MEVCUT davranışı (kenardan kenara) korur, hiçbir stil eklenmez; "boxed" seçilirse
+    // `.container-fluid`in kendi padding'i KORUNARAK yalnızca `max-width` + otomatik yatay margin
+    // inline stil olarak eklenir (Bootstrap'ın sabit breakpoint'li `.container`i yerine ÖZEL bir
+    // genişlik - kullanıcının "ortalı GENİŞ" isteğine uyar).
+    var layoutSettings = await Sender.Send(new GetSettingsQuery(LayoutSettingKeys.All));
+    var headerContainerMode = layoutSettings.FirstOrDefault(s => s.Key == LayoutSettingKeys.HeaderContainerMode)?.Value ?? LayoutSettingKeys.ModeFluid;
+    var headerContainerMaxWidth = layoutSettings.FirstOrDefault(s => s.Key == LayoutSettingKeys.HeaderContainerMaxWidth)?.Value;
+    string? headerContainerStyle = headerContainerMode == LayoutSettingKeys.ModeBoxed
+        ? $"max-width:{(string.IsNullOrWhiteSpace(headerContainerMaxWidth) ? LayoutSettingKeys.DefaultMaxWidth : headerContainerMaxWidth)};margin-left:auto;margin-right:auto;"
+        : null;
+}
+<!DOCTYPE html>
+<html lang="@currentLanguage" dir="@(isRtl ? "rtl" : "ltr")">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @if (ViewData["MetaDescription"] is string metaDescription && !string.IsNullOrWhiteSpace(metaDescription))
+    {
+        <meta name="description" content="@metaDescription" />
+    }
+    @if (ViewData["MetaKeywords"] is string metaKeywords && !string.IsNullOrWhiteSpace(metaKeywords))
+    {
+        <meta name="keywords" content="@metaKeywords" />
+    }
+    @if (ViewData["MetaRobots"] is string metaRobots && !string.IsNullOrWhiteSpace(metaRobots))
+    {
+        <meta name="robots" content="@metaRobots" />
+    }
+    <title>@ViewData["Title"] - Dekorras</title>
+    <script type="importmap"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Lato:wght@400;700&display=swap">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    @if (isRtl)
+    {
+        <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.rtl.min.css" />
+    }
+    else
+    {
+        <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    }
+    <link rel="stylesheet" href="~/css/variables.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/base.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/layout.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/mega-menu.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/product-grid.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/quickview.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Dekorras.Storefront.styles.css" asp-append-version="true" />
+    @if (isRtl)
+    {
+        <link rel="stylesheet" href="~/css/rtl.css" asp-append-version="true" />
+    }
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body>
+    <header>
+        <div class="dk-topbar">
+            <div class="container-fluid d-flex flex-wrap justify-content-between align-items-center py-1" style="@headerContainerStyle">
+                <div class="d-flex align-items-center gap-3">
+                    @if (!string.IsNullOrWhiteSpace(phoneNumber))
+                    {
+                        <a href="tel:@phoneNumber"><i class="bi bi-telephone"></i> @phoneNumber</a>
+                    }
+                    <a asp-controller="Cms" asp-action="Page" asp-route-slug="iletisim"><i class="bi bi-envelope"></i> @Localizer["İletişim"]</a>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <form asp-controller="Language" asp-action="SetLanguage" method="post" class="d-inline">
+                        <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                        <select name="code" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()" aria-label="@Localizer["Dil"]">
+                            @foreach (var language in StorefrontLanguage.Supported)
+                            {
+                                <option value="@language.Code" selected="@(language.Code == currentLanguage)">@language.DisplayName</option>
+                            }
+                        </select>
+                    </form>
+                    <form asp-controller="Currency" asp-action="SetCurrency" method="post" class="d-inline">
+                        <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                        <select name="code" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()" aria-label="@Localizer["Para Birimi"]">
+                            @foreach (var currency in activeCurrencies)
+                            {
+                                <option value="@currency.Code" selected="@(currency.Code == currentCurrencyCode)">@currency.Code (@currency.Symbol)</option>
+                            }
+                        </select>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="dk-header">
+            <div class="container-fluid d-flex align-items-center gap-3" style="@headerContainerStyle">
+                <a class="navbar-brand mb-0" asp-controller="Home" asp-action="Index">Dekorras</a>
+
+                <form asp-controller="Search" asp-action="Index" method="get" class="d-none d-md-flex flex-grow-1 mx-2" style="max-width: 480px;">
+                    <input type="search" name="q" class="form-control" placeholder="@Localizer["Ürün ara..."]" value="@Context.Request.Query["q"]" />
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+                </form>
+
+                <ul class="navbar-nav flex-row align-items-center gap-2 ms-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person"></i>
+                            <span class="d-none d-lg-inline">@Localizer["Hesabım"]</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            @if (User.Identity?.IsAuthenticated == true)
+                            {
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Orders">@Localizer["Siparişlerim"]</a></li>
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Wishlist">@Localizer["Favorilerim"]</a></li>
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Addresses">@Localizer["Adreslerim"]</a></li>
+                                <li><hr class="dropdown-divider" /></li>
+                                <li>
+                                    <form asp-controller="Account" asp-action="Logout" method="post">
+                                        <button type="submit" class="dropdown-item">@Localizer["Çıkış Yap"]</button>
+                                    </form>
+                                </li>
+                            }
+                            else
+                            {
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Login">@Localizer["Giriş Yap"]</a></li>
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Register">@Localizer["Üye Ol"]</a></li>
+                            }
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-controller="Compare" asp-action="Index">
+                            <i class="bi bi-arrow-left-right"></i>
+                            <span class="d-none d-lg-inline">@Localizer["Karşılaştır"]</span> (@compareCount)
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark" asp-controller="Cart" asp-action="Index">
+                            <i class="bi bi-cart3"></i>
+                            <span class="d-none d-lg-inline">@Localizer["Sepetim"]</span>
+                        </a>
+                    </li>
+                </ul>
+
+                @* NOT: Bootstrap'ın standart `.navbar-toggler-icon`'u (arka plan SVG'si) `--bs-navbar-toggler-icon-bg`
+                   CSS değişkenine dayanıyor, ama bu değişken YALNIZCA gerçek bir `.navbar` sınıfı içinde
+                   tanımlı (bkz. bootstrap.css `.navbar{...}` bloğu) - bu buton `.dk-header` (düz bir flex
+                   div, `.navbar` DEĞİL) içinde olduğu için o değişken TANIMSIZ kalıyor ve ikon GÖRÜNMEZ
+                   oluyordu (buton DOM'da vardı, içi boştu - kullanıcı ekran görüntüsüyle bildirdi). Bu
+                   dosyada zaten her yerde kullanılan Bootstrap Icons glifiyle (`bi bi-list`) değiştirilip
+                   bu CSS değişkeni bağımlılığı TAMAMEN ortadan kaldırıldı. *@
+                <button class="navbar-toggler d-lg-none border-0 p-1" type="button" data-bs-toggle="offcanvas" data-bs-target="#dkMobileMenu" aria-controls="dkMobileMenu"
+                        aria-label="@Localizer["Menüyü aç"]">
+                    <i class="bi bi-list fs-2 text-dark"></i>
+                </button>
+            </div>
+        </div>
+
+        @* Mobil menü: kullanıcı isteği üzerine eskiden navbar'ın altına AÇILAN bir Bootstrap
+           "collapse" iken, artık SAĞDAN kayan gerçek bir "offcanvas" çekmecesine çevrildi. Bootstrap
+           5.2+'ın `.offcanvas-lg` sınıfı TEK bir elementle ikisini birden karşılıyor: ≥lg (masaüstü)
+           ekranlarda `.offcanvas-header` gizlenip `.offcanvas-body` normal, satır-içi (inline) bir
+           navbar içeriği gibi davranmaya devam ediyor (mega menü YATAY görünümü BOZULMUYOR); <lg
+           (mobil/tablet) ekranlarda ise GERÇEK bir offcanvas'a dönüşüyor (backdrop + sağdan
+           `translateX` animasyonu + kapatma butonu, `bootstrap.bundle.min.js` içindeki hazır
+           Offcanvas bileşeniyle, YENİ bir JS YAZILMADI). Çekmecenin ALTINA (yalnızca mobilde,
+           `d-lg-none`) iletişim bilgileri + sosyal medya linkleri eklendi - kullanıcı isteği. *@
+        <nav class="dk-mega-nav navbar navbar-expand-lg navbar-light py-0">
+            <div class="container-fluid" style="@headerContainerStyle">
+                <div class="offcanvas offcanvas-end offcanvas-lg" tabindex="-1" id="dkMobileMenu" aria-labelledby="dkMobileMenuLabel">
+                    <div class="offcanvas-header d-lg-none">
+                        <h5 class="offcanvas-title" id="dkMobileMenuLabel">@Localizer["Menü"]</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="@Localizer["Kapat"]"></button>
+                    </div>
+                    <div class="offcanvas-body">
+                        <div class="d-md-none py-2">
+                            <form asp-controller="Search" asp-action="Index" method="get" class="d-flex">
+                                <input type="search" name="q" class="form-control" placeholder="@Localizer["Ürün ara..."]" value="@Context.Request.Query["q"]" />
+                                <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+                            </form>
+                        </div>
+                        @await Component.InvokeAsync("MainMenu")
+
+                        <div class="dk-mobile-menu-footer d-lg-none mt-3 pt-3">
+                            @if (!string.IsNullOrWhiteSpace(phoneNumber))
+                            {
+                                <a href="tel:@phoneNumber" class="d-flex align-items-center gap-2 text-white text-decoration-none mb-2">
+                                    <i class="bi bi-telephone"></i> @phoneNumber
+                                </a>
+                            }
+                            <a asp-controller="Cms" asp-action="Page" asp-route-slug="iletisim" class="d-flex align-items-center gap-2 text-white text-decoration-none mb-3">
+                                <i class="bi bi-envelope"></i> @Localizer["İletişim"]
+                            </a>
+                            @if (!string.IsNullOrWhiteSpace(whatsAppUrl) || !string.IsNullOrWhiteSpace(instagramUrl) || !string.IsNullOrWhiteSpace(telegramUrl))
+                            {
+                                <div class="d-flex gap-3 dk-mobile-menu-social">
+                                    @if (!string.IsNullOrWhiteSpace(whatsAppUrl))
+                                    {
+                                        <a href="@whatsAppUrl" target="_blank" rel="noopener" class="text-white" aria-label="WhatsApp"><i class="bi bi-whatsapp fs-5"></i></a>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(instagramUrl))
+                                    {
+                                        <a href="@instagramUrl" target="_blank" rel="noopener" class="text-white" aria-label="Instagram"><i class="bi bi-instagram fs-5"></i></a>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(telegramUrl))
+                                    {
+                                        <a href="@telegramUrl" target="_blank" rel="noopener" class="text-white" aria-label="Telegram"><i class="bi bi-telegram fs-5"></i></a>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="dk-footer">
+        @{
+            var newsletterMessage = TempData["NewsletterMessage"] as string;
+        }
+        @if (!string.IsNullOrWhiteSpace(newsletterMessage))
+        {
+            <div class="container pt-3"><p class="text-success mb-0">@newsletterMessage</p></div>
+        }
+        <div class="container">
+            <div class="dk-footer-columns">
+                <div>
+                    <h5>@Localizer["Kurumsal"]</h5>
+                    <ul>
+                        <li><a asp-controller="Cms" asp-action="Page" asp-route-slug="hakkimizda">@Localizer["Hakkımızda"]</a></li>
+                        <li><a asp-controller="Cms" asp-action="Page" asp-route-slug="gizlilik-politikasi">@Localizer["Gizlilik Politikası"]</a></li>
+                        <li><a asp-controller="Cms" asp-action="Page" asp-route-slug="mesafeli-satis-sozlesmesi">@Localizer["Mesafeli Satış Sözleşmesi"]</a></li>
+                        <li><a asp-controller="Cms" asp-action="Page" asp-route-slug="iade-iptal-kosullari">@Localizer["İade/İptal Koşulları"]</a></li>
+                        <li><a asp-controller="Cms" asp-action="Page" asp-route-slug="iletisim">@Localizer["İletişim"]</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h5>@Localizer["Hesabım"]</h5>
+                    <ul>
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <li><a asp-controller="Account" asp-action="Orders">@Localizer["Siparişlerim"]</a></li>
+                            <li><a asp-controller="Account" asp-action="Wishlist">@Localizer["Favori Listem"]</a></li>
+                            <li><a asp-controller="Account" asp-action="Addresses">@Localizer["Adreslerim"]</a></li>
+                        }
+                        else
+                        {
+                            <li><a asp-controller="Account" asp-action="Login">@Localizer["Giriş Yap"]</a></li>
+                            <li><a asp-controller="Account" asp-action="Register">@Localizer["Kayıt Ol"]</a></li>
+                        }
+                    </ul>
+                </div>
+                <div>
+                    <h5>Blog</h5>
+                    @if (recentBlogPosts.Count == 0)
+                    {
+                        <p class="small mb-0">@Localizer["Henüz blog yazısı yok."]</p>
+                    }
+                    else
+                    {
+                        <ul>
+                            @foreach (var post in recentBlogPosts)
+                            {
+                                <li><a asp-controller="Blog" asp-action="Details" asp-route-slug="@post.Slug">@post.Title</a></li>
+                            }
+                        </ul>
+                    }
+                </div>
+                <div>
+                    <h5>@Localizer["Bizi Takip Edin"]</h5>
+                    <div class="dk-footer-social mb-3">
+                        @if (!string.IsNullOrWhiteSpace(whatsAppUrl))
+                        {
+                            <a href="@whatsAppUrl" target="_blank" rel="noopener" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(instagramUrl))
+                        {
+                            <a href="@instagramUrl" target="_blank" rel="noopener" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(telegramUrl))
+                        {
+                            <a href="@telegramUrl" target="_blank" rel="noopener" aria-label="Telegram"><i class="bi bi-telegram"></i></a>
+                        }
+                    </div>
+                    <form asp-controller="Newsletter" asp-action="Subscribe" method="post" class="d-flex gap-1">
+                        <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                        <input type="email" name="email" class="form-control form-control-sm" placeholder="@Localizer["E-posta adresiniz"]" required />
+                        <button type="submit" class="btn btn-sm btn-primary text-nowrap">@Localizer["Abone Ol"]</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="dk-footer-bottom">
+            <div class="container d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span>&copy; @DateTime.UtcNow.Year - Dekorras Mimarlık Mühendislik</span>
+                @if (!string.IsNullOrWhiteSpace(phoneNumber))
+                {
+                    <a href="tel:@phoneNumber"><i class="bi bi-telephone"></i> @phoneNumber</a>
+                }
+            </div>
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/header.js" asp-append-version="true"></script>
+    <script src="~/js/quickview.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+
+    <div class="modal fade" id="dkQuickviewModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@Localizer["Hızlı Bakış"]</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

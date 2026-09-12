@@ -1,0 +1,137 @@
+/* Ürün kartı - hover'da yükselme efekti + "Hızlı Bakış" butonu (bkz. quickview.js). */
+.dk-product-card {
+    border-color: var(--dk-color-border);
+    transition: box-shadow var(--dk-transition), transform var(--dk-transition);
+}
+
+.dk-product-card:hover {
+    box-shadow: var(--dk-shadow-md);
+    transform: translateY(-2px);
+}
+
+.dk-product-card-media {
+    position: relative;
+    overflow: hidden;
+}
+
+.dk-product-card-media .card-img-top {
+    height: 200px;
+    object-fit: cover;
+}
+
+.dk-quickview-btn {
+    position: absolute;
+    left: 50%;
+    bottom: 0.75rem;
+    transform: translate(-50%, 12px);
+    opacity: 0;
+    transition: opacity var(--dk-transition), transform var(--dk-transition);
+    box-shadow: var(--dk-shadow-sm);
+    white-space: nowrap;
+}
+
+.dk-product-card:hover .dk-quickview-btn,
+.dk-quickview-btn:focus {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+/* Dokunmatik cihazlarda hover olmadığı için buton her zaman görünür kalır. */
+@media (hover: none) {
+    .dk-quickview-btn {
+        opacity: 1;
+        transform: translate(-50%, 0);
+        position: static;
+        margin: 0.5rem auto 0;
+        display: block;
+        width: fit-content;
+    }
+}
+
+/* Ürün listeleme sayfası (Kategori/Arama) - "solda kriterler" kenar çubuğu kartı, bkz.
+   _ProductFilters.cshtml. */
+.dk-filter-sidebar {
+    border-color: var(--dk-color-border);
+    position: sticky;
+    top: 1rem;
+}
+
+/* Dinamik sütun sayısı (2/3/4) - `_ProductGrid.cshtml`'in `data-cols` özniteliğine göre, Bootstrap'ın
+   KENDİ `row-cols-*` yüzde mantığıyla (bkz. backend/README.md - kullanıcı isteği: "bootstrap
+   yapısına göre 2'li/3'lü/4'lü görünüm"). `.row`'un varsayılan `.col` sınıfı (eşit genişlikli,
+   `flex: 1 0 0%`) burada override ediliyor. Mobilde (< 576px) her zaman TEK sütun, küçük
+   tabletlerde (576-767px) her zaman İKİ sütun - seçilen değerden BAĞIMSIZ, tıpkı Bootstrap'ın
+   `row-cols-1 row-cols-sm-2 row-cols-md-{N}` üçlüsünün davranacağı gibi. */
+[data-product-row] > .col {
+    flex: 0 0 100%;
+    max-width: 100%;
+}
+
+@media (min-width: 576px) {
+    [data-product-row] > .col {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}
+
+@media (min-width: 768px) {
+    [data-product-row][data-cols="2"] > .col {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+
+    [data-product-row][data-cols="3"] > .col {
+        flex: 0 0 33.3333%;
+        max-width: 33.3333%;
+    }
+
+    [data-product-row][data-cols="4"] > .col {
+        flex: 0 0 25%;
+        max-width: 25%;
+    }
+}
+
+/* Liste görünümü (`data-view="list"`, bkz. `_ProductToolbar.cshtml`/`product-view.js`) - seçili
+   sütun sayısından BAĞIMSIZ olarak her kart TEK satır halinde, görsel solda/bilgiler sağda. Aynı
+   kart DOM'u (`.dk-product-card`) yeniden kullanılıyor, ayrı bir liste şablonu YAZILMADI - yalnızca
+   CSS ile yatay `flex` düzenine çevriliyor. */
+[data-product-row][data-view="list"] > .col {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+}
+
+[data-product-row][data-view="list"] .dk-product-card {
+    flex-direction: row;
+}
+
+[data-product-row][data-view="list"] .dk-product-card-media {
+    width: 220px;
+    flex: 0 0 220px;
+}
+
+[data-product-row][data-view="list"] .dk-product-card-media .card-img-top {
+    height: 100%;
+    min-height: 160px;
+}
+
+[data-product-row][data-view="list"] .card-body {
+    flex: 1 1 auto;
+}
+
+@media (max-width: 575.98px) {
+    [data-product-row][data-view="list"] .dk-product-card {
+        flex-direction: column;
+    }
+
+    [data-product-row][data-view="list"] .dk-product-card-media {
+        width: 100%;
+        flex-basis: auto;
+    }
+}
+
+/* Araç çubuğundaki sütun-sayısı düğmeleri liste görünümündeyken anlamsız kaldığı için soluklaştırılır
+   (bkz. product-view.js - `view` "list" olduğunda `.dk-cols-disabled` eklenir). */
+[data-dk-cols-group].dk-cols-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}

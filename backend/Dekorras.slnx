@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Core/">
+    <Project Path="src/Core/Dekorras.Application/Dekorras.Application.csproj" />
+    <Project Path="src/Core/Dekorras.Domain/Dekorras.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/Dekorras.Infrastructure/Dekorras.Infrastructure.csproj" />
+    <Project Path="src/Infrastructure/Dekorras.Persistence/Dekorras.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/src/Presentation/">
+    <Project Path="src/Presentation/Dekorras.Api/Dekorras.Api.csproj" />
+    <Project Path="src/Presentation/Dekorras.Storefront/Dekorras.Storefront.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Dekorras.Application.Tests/Dekorras.Application.Tests.csproj" />
+    <Project Path="tests/Dekorras.Domain.Tests/Dekorras.Domain.Tests.csproj" />
+    <Project Path="tests/Dekorras.IntegrationTests/Dekorras.IntegrationTests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Dekorras.CatalogImporter/Dekorras.CatalogImporter.csproj" />
+  </Folder>
+</Solution>

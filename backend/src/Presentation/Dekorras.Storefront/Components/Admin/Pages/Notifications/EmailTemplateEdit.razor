@@ -1,0 +1,98 @@
+﻿@page "/admin/notifications/email-templates/new"
+@page "/admin/notifications/email-templates/{Id:guid}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.Notifications.Commands
+@using Dekorras.Application.Notifications.Queries
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsNew ? "Yeni Şablon" : "Şablonu Düzenle")</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">@(IsNew ? "Yeni Şablon" : "Şablonu Düzenle")</h4>
+</div>
+
+<div class="card" style="max-width: 700px;">
+    <div class="card-body">
+        @if (IsNew)
+        {
+            <div class="row">
+                <div class="col mb-2">
+                    <label class="form-label">Anahtar</label>
+                    <input class="form-control" @bind="_key" placeholder="ör. OrderConfirmation" />
+                </div>
+                <div class="col mb-2">
+                    <label class="form-label">Dil</label>
+                    <input class="form-control" @bind="_languageCode" placeholder="tr" />
+                </div>
+            </div>
+        }
+        <div class="mb-2">
+            <label class="form-label">Konu</label>
+            <input class="form-control" @bind="_subject" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">İçerik (HTML)</label>
+            <textarea class="form-control" rows="6" @bind="_bodyHtml"></textarea>
+        </div>
+
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+
+        <button class="btn btn-success" @onclick="SaveAsync">Kaydet</button>
+        <a class="btn btn-secondary ms-2" href="/admin/notifications/email-templates">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+
+    private string _key = "";
+    private string _languageCode = "tr";
+    private string _subject = "";
+    private string _bodyHtml = "";
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id is Guid id)
+        {
+            var detail = await Sender.Send(new GetEmailTemplateByIdQuery(id));
+            if (detail is null) return;
+
+            _key = detail.Key;
+            _languageCode = detail.LanguageCode;
+            _subject = detail.Subject;
+            _bodyHtml = detail.BodyHtml;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (IsNew)
+            {
+                await Sender.Send(new CreateEmailTemplateCommand(_key, _languageCode, _subject, _bodyHtml));
+            }
+            else
+            {
+                await Sender.Send(new UpdateEmailTemplateCommand(Id!.Value, _subject, _bodyHtml));
+            }
+
+            NavigationManager.NavigateTo("/admin/notifications/email-templates");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FluentValidation.ValidationException)
+        {
+            _errorMessage = ex is FluentValidation.ValidationException vex
+                ? string.Join(" ", vex.Errors.Select(e => e.ErrorMessage))
+                : ex.Message;
+        }
+    }
+}

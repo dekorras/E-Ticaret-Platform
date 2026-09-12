@@ -1,0 +1,82 @@
+﻿@page "/admin/ecommerce/campaigns"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Ordering.Commands
+@using Dekorras.Application.Ordering.Queries
+@using Dekorras.Domain.Ordering
+@inject MediatR.ISender Sender
+
+<PageTitle>Kampanyalar</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Kampanyalar</h4>
+    <a class="btn btn-primary" href="/admin/ecommerce/campaigns/new">+ Yeni Kampanya</a>
+</div>
+<p class="text-muted">
+    Kupondan farkı: müşteri kod girmez. Koşulları (şu an yalnızca "Sepet En Az Tutarı") sağlayan
+    her sepete checkout anında otomatik uygulanır. Bir kupon zaten uygulanmışsa kampanya atlanır;
+    birden çok kampanya uygunsa en yüksek indirimi sağlayan seçilir.
+</p>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive table-card">
+            <table id="campaignsTable" class="table table-nowrap align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Ad</th>
+                        <th>İndirim</th>
+                        <th>Min. Sepet Tutarı</th>
+                        <th>Geçerlilik</th>
+                        <th>Kullanım</th>
+                        <th>Durum</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_campaigns is not null)
+                    {
+                        @foreach (var campaign in _campaigns)
+                        {
+                            <tr>
+                                <td>@campaign.Name</td>
+                                <td data-order="@campaign.DiscountValue.ToString(System.Globalization.CultureInfo.InvariantCulture)">@(campaign.DiscountType == DiscountType.Percentage ? $"%{campaign.DiscountValue:0}" : $"{campaign.DiscountValue:N2} ₺")</td>
+                                <td data-order="@(campaign.MinCartTotalTry?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0")">@(campaign.MinCartTotalTry is decimal min ? $"{min:N2} ₺" : "—")</td>
+                                <td data-order="@campaign.StartsAtUtc.ToString("o")">@campaign.StartsAtUtc.ToLocalTime().ToString("dd.MM.yyyy") - @campaign.EndsAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                                <td>@campaign.UsageCount@(campaign.UsageLimit is not null ? $" / {campaign.UsageLimit}" : "")</td>
+                                <td>
+                                    <span class="badge @(campaign.IsActive ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")">@(campaign.IsActive ? "Aktif" : "Pasif")</span>
+                                </td>
+                                <td>
+                                    @if (campaign.IsActive)
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => ToggleActiveAsync(campaign.Id, false)">Pasife Al</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-success" @onclick="() => ToggleActiveAsync(campaign.Id, true)">Aktifleştir</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+            <DataTableScript TableId="campaignsTable" ReloadToken="_campaigns" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyCollection<CampaignListItemDto>? _campaigns;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _campaigns = await Sender.Send(new GetCampaignsQuery());
+
+    private async Task ToggleActiveAsync(Guid id, bool isActive)
+    {
+        await Sender.Send(new SetCampaignActiveCommand(id, isActive));
+        await LoadAsync();
+    }
+}

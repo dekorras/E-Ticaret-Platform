@@ -1,0 +1,45 @@
+@using Dekorras.Application.Catalog.Storefront
+@model IReadOnlyCollection<StorefrontMenuItemDto>
+
+<ul class="navbar-nav flex-grow-1">
+    <li class="nav-item">
+        <a class="dk-mega-link" asp-controller="Home" asp-action="Index">@Localizer["Anasayfa"]</a>
+    </li>
+    <li class="nav-item">
+        <a class="dk-mega-link" asp-controller="Blog" asp-action="Index">Blog</a>
+    </li>
+    @foreach (var item in Model)
+    {
+        @if (item.Children.Count > 0)
+        {
+            <li class="nav-item dk-mega-item">
+                <a class="dk-mega-link" asp-controller="Category" asp-action="Index" asp-route-slug="@item.Slug">
+                    @item.Name
+                </a>
+                <div class="dk-mega-panel">
+                    <div class="dk-mega-panel-grid">
+                        <div class="dk-mega-panel-col">
+                            <a class="dk-mega-all" asp-controller="Category" asp-action="Index" asp-route-slug="@item.Slug">@Localizer["Tümü"]</a>
+                            @foreach (var child in item.Children)
+                            {
+                                <a asp-controller="Category" asp-action="Index" asp-route-slug="@child.Slug">
+                                    @if (!string.IsNullOrWhiteSpace(child.ImageUrl))
+                                    {
+                                        <img src="@child.ImageUrl" alt="" loading="lazy" />
+                                    }
+                                    <span>@child.Name</span>
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </li>
+        }
+        else
+        {
+            <li class="nav-item">
+                <a class="dk-mega-link" asp-controller="Category" asp-action="Index" asp-route-slug="@item.Slug">@item.Name</a>
+            </li>
+        }
+    }
+</ul>

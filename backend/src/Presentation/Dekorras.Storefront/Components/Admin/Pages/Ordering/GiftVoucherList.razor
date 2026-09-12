@@ -1,0 +1,77 @@
+﻿@page "/admin/ecommerce/gift-vouchers"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Ordering.Commands
+@using Dekorras.Application.Ordering.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>Hediye Çekleri</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Hediye Çekleri</h4>
+    <a class="btn btn-primary" href="/admin/ecommerce/gift-vouchers/new">+ Yeni Hediye Çeki</a>
+</div>
+<p class="text-muted">
+    Kupondan farkı: bir hediye çeki bir İNDİRİM değil, önceden ödenmiş bir BAKİYEDİR - checkout'ta
+    ödemenin bir kısmını (veya tamamını) karşılar, kupon/kampanya ile BİRLİKTE kullanılabilir.
+    Kısmi kullanımda kalan bakiye bir SONRAKİ siparişte tekrar kullanılabilir.
+</p>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive table-card">
+            <table id="giftVouchersTable" class="table table-nowrap align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Kod</th>
+                        <th>Başlangıç Tutarı</th>
+                        <th>Kalan Bakiye</th>
+                        <th>Durum</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_vouchers is not null)
+                    {
+                        @foreach (var voucher in _vouchers)
+                        {
+                            <tr>
+                                <td><code>@voucher.Code</code></td>
+                                <td data-order="@voucher.AmountTry.ToString(System.Globalization.CultureInfo.InvariantCulture)">@voucher.AmountTry.ToString("N2") ₺</td>
+                                <td data-order="@voucher.RemainingBalanceTry.ToString(System.Globalization.CultureInfo.InvariantCulture)">@voucher.RemainingBalanceTry.ToString("N2") ₺</td>
+                                <td>
+                                    <span class="badge @(voucher.IsActive ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")">@(voucher.IsActive ? "Aktif" : "Pasif")</span>
+                                </td>
+                                <td>
+                                    @if (voucher.IsActive)
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => ToggleActiveAsync(voucher.Id, false)">Pasife Al</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-success" @onclick="() => ToggleActiveAsync(voucher.Id, true)">Aktifleştir</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+            <DataTableScript TableId="giftVouchersTable" ReloadToken="_vouchers" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyCollection<GiftVoucherDto>? _vouchers;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _vouchers = await Sender.Send(new GetGiftVouchersQuery());
+
+    private async Task ToggleActiveAsync(Guid id, bool isActive)
+    {
+        await Sender.Send(new SetGiftVoucherActiveCommand(id, isActive));
+        await LoadAsync();
+    }
+}

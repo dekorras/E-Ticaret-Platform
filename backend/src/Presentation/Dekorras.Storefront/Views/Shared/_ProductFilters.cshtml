@@ -1,0 +1,76 @@
+@using Dekorras.Application.Catalog.Storefront
+@using Dekorras.Storefront.Models
+@model ProductListingViewModel
+@{
+    var sortLabels = new Dictionary<ProductSortOrder, string>
+    {
+        [ProductSortOrder.Default] = "Varsayılan",
+        [ProductSortOrder.NameAsc] = "Ad (A-Z)",
+        [ProductSortOrder.NameDesc] = "Ad (Z-A)",
+        [ProductSortOrder.PriceAsc] = "Ucuzdan Pahalıya",
+        [ProductSortOrder.PriceDesc] = "Pahalıdan Ucuza",
+        [ProductSortOrder.Rating] = "Puana Göre",
+        [ProductSortOrder.ProductCode] = "Ürün Koduna Göre"
+    };
+}
+
+@* Ürün listeleme sayfalarının (Kategori/Arama) SOL kenar çubuğu - kullanıcının isteği üzerine
+   eskiden sayfanın en üstünde YATAY tek satırlık bir form olan bu filtre alanı, standart bir
+   e-ticaret "solda kriterler, sağda ürünler" düzenine uyacak şekilde DİKEY bir kart'a çevrildi
+   (bkz. Views/Category/Index.cshtml, Views/Search/Index.cshtml, backend/README.md). *@
+<div class="card dk-filter-sidebar">
+    <div class="card-body">
+        <h2 class="h6 text-uppercase mb-3">@Localizer["Kriterler"]</h2>
+        <form method="get" class="d-flex flex-column gap-3">
+            @if (Context.Request.Query["slug"].Count > 0)
+            {
+                <input type="hidden" name="slug" value="@Context.Request.Query["slug"]" />
+            }
+            @if (Context.Request.Query["q"].Count > 0)
+            {
+                <input type="hidden" name="q" value="@Context.Request.Query["q"]" />
+            }
+            <input type="hidden" name="page" value="1" />
+            <div>
+                <label class="form-label small mb-1 fw-medium">@Localizer["Min. Fiyat"]</label>
+                <input type="number" step="0.01" name="minPrice" class="form-control form-control-sm" value="@Model.MinPriceTry" />
+            </div>
+            <div>
+                <label class="form-label small mb-1 fw-medium">@Localizer["Max. Fiyat"]</label>
+                <input type="number" step="0.01" name="maxPrice" class="form-control form-control-sm" value="@Model.MaxPriceTry" />
+            </div>
+            @if (Model.Brands.Count > 0)
+            {
+                <div>
+                    <label class="form-label small mb-1 fw-medium">@Localizer["Marka"]</label>
+                    <select name="brandId" class="form-select form-select-sm">
+                        <option value="">@Localizer["Tümü"]</option>
+                        @foreach (var brand in Model.Brands)
+                        {
+                            <option value="@brand.Id" selected="@(Model.BrandId == brand.Id)">@brand.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div>
+                <label class="form-label small mb-1 fw-medium">@Localizer["Sırala"]</label>
+                <select name="sort" class="form-select form-select-sm">
+                    @foreach (var (sortValue, label) in sortLabels)
+                    {
+                        <option value="@sortValue" selected="@(Model.SortBy == sortValue)">@label</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="form-label small mb-1 fw-medium">@Localizer["Sayfa Başına"]</label>
+                <select name="pageSize" class="form-select form-select-sm">
+                    @foreach (var size in ProductListingHelper.AllowedPageSizes)
+                    {
+                        <option value="@size" selected="@(Model.PageSize == size)">@size</option>
+                    }
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm w-100">@Localizer["Filtrele"]</button>
+        </form>
+    </div>
+</div>

@@ -1,0 +1,1000 @@
+﻿@page "/admin/ecommerce/products/new"
+@page "/admin/ecommerce/products/{Id:guid}"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Catalog.Commands
+@using Dekorras.Application.Catalog.Queries
+@using Dekorras.Application.Common
+@using Dekorras.Domain.Catalog
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsNew ? "Yeni Ürün" : "Ürünü Düzenle")</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">@(IsNew ? "Yeni Ürün" : "Ürünü Düzenle")</h4>
+</div>
+
+@if (_categoryOptions is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <div class="mb-3" style="max-width: 300px;">
+        <label class="form-label">Düzenlenen Dil</label>
+        <select class="form-select" @bind="_editingLanguageCode" @bind:after="OnEditingLanguageChangedAsync">
+            @foreach (var language in SupportedLanguages.All)
+            {
+                <option value="@language.Code">@language.DisplayName</option>
+            }
+        </select>
+        <p class="form-text text-muted">Ad/Açıklama/Meta alanları seçilen dile göre ayrı ayrı saklanır - diğer alanlar (fiyat, stok, vb.) dilden bağımsızdır.</p>
+    </div>
+
+    <div class="row" style="max-width: 900px;">
+        <div class="col-md-6">
+            <div class="mb-2">
+                <label class="form-label">Ürün Adı</label>
+                <input class="form-control" @bind="_name" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Slug (URL)</label>
+                <input class="form-control" @bind="_slug" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Ürün Kodu</label>
+                <input class="form-control" @bind="_productCode" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Açıklama</label>
+                <textarea class="form-control" rows="4" @bind="_description"></textarea>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Meta Başlık (SEO)</label>
+                <input class="form-control" @bind="_metaTitle" placeholder="Boş bırakılırsa ürün adı kullanılır" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Meta Açıklama (SEO)</label>
+                <textarea class="form-control" rows="2" @bind="_metaDescription"></textarea>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Meta Anahtar Kelimeler (SEO)</label>
+                <input class="form-control" @bind="_metaKeywords" placeholder="virgülle ayırın" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Meta Robots (SEO)</label>
+                <select class="form-select" @bind="_metaRobots">
+                    <option value="">(Varsayılan - etiket eklenmez)</option>
+                    <option value="index,follow">index,follow</option>
+                    <option value="noindex,follow">noindex,follow</option>
+                    <option value="index,nofollow">index,nofollow</option>
+                    <option value="noindex,nofollow">noindex,nofollow</option>
+                </select>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Marka</label>
+                <select class="form-select" @bind="_brandIdText">
+                    <option value="">(Markasız)</option>
+                    @foreach (var brand in _brands!)
+                    {
+                        <option value="@brand.Id">@brand.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="row">
+                <div class="col mb-2">
+                    <label class="form-label">Fiyat (TRY)</label>
+                    <input type="number" step="0.01" class="form-control" @bind="_basePriceTry" />
+                </div>
+                <div class="col mb-2">
+                    <label class="form-label">KDV %</label>
+                    <input type="number" step="1" class="form-control" @bind="_taxRatePercentage" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col mb-2">
+                    <label class="form-label">Birim</label>
+                    <select class="form-select" @bind="_unitOfMeasure">
+                        <option value="@UnitOfMeasure.Piece">Adet</option>
+                        <option value="@UnitOfMeasure.SquareMeter">m² (metrekare)</option>
+                        <option value="@UnitOfMeasure.LinearMeter">mt (metre tül)</option>
+                    </select>
+                </div>
+                <div class="col mb-2">
+                    <label class="form-label">Min. Satış Adedi</label>
+                    <input type="number" class="form-control" @bind="_minimumOrderQuantity" />
+                </div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Stok Adedi</label>
+                <input type="number" class="form-control" @bind="_stockQuantity" />
+            </div>
+            @if (Id is not null)
+            {
+                <div class="mb-2 form-check">
+                    <input type="checkbox" class="form-check-input" id="trackStockCheck" @bind="_trackStock" />
+                    <label class="form-check-label" for="trackStockCheck">Stoktan Düş</label>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Stok Dışı Durumu</label>
+                    <div class="input-group">
+                        <select class="form-select" @bind="_stockAvailability">
+                            <option value="@StockAvailability.InStock">Stokta Var</option>
+                            <option value="@StockAvailability.OutOfStock">Stokta Yok</option>
+                            <option value="@StockAvailability.PreOrder">Ön Sipariş</option>
+                            <option value="@StockAvailability.ArrivesInDays">2-3 Gün İçinde Kargoda</option>
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="SaveStockSettingsAsync">Kaydet</button>
+                    </div>
+                    <p class="form-text">
+                        "Stoktan Düş" AKTİFSE, checkout sırasında bu alan otomatik olarak Stokta Var/
+                        Yok'a döner - "Ön Sipariş"/"2-3 Gün İçinde" yalnızca "Stoktan Düş" KAPALI
+                        ürünlerde (ör. sipariş üzerine tedarik edilen ürünler) kalıcıdır.
+                    </p>
+                </div>
+            }
+            <div class="mb-2">
+                <label class="form-label">Ağırlık (kg)</label>
+                <input type="number" step="0.01" class="form-control" @bind="_weightKgText" placeholder="Boş bırakılırsa kargo hesabında 1 kg varsayılır" />
+            </div>
+            <div class="row">
+                <div class="col mb-2">
+                    <label class="form-label">Uzunluk (cm)</label>
+                    <input type="number" step="0.1" class="form-control" @bind="_lengthCmText" />
+                </div>
+                <div class="col mb-2">
+                    <label class="form-label">Genişlik (cm)</label>
+                    <input type="number" step="0.1" class="form-control" @bind="_widthCmText" />
+                </div>
+                <div class="col mb-2">
+                    <label class="form-label">Yükseklik (cm)</label>
+                    <input type="number" step="0.1" class="form-control" @bind="_heightCmText" />
+                </div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">GTİP / HS Kodu (e-ihracat)</label>
+                <input class="form-control" @bind="_hsCode" placeholder="ör. 6304.92" />
+            </div>
+
+            <div class="row">
+                <div class="col-6 mb-2">
+                    <label class="form-label">SKU</label>
+                    <input class="form-control" @bind="_sku" />
+                </div>
+                <div class="col-6 mb-2">
+                    <label class="form-label">MPN (Üretici Parça No)</label>
+                    <input class="form-control" @bind="_mpn" />
+                </div>
+                <div class="col-6 mb-2">
+                    <label class="form-label">UPC</label>
+                    <input class="form-control" @bind="_upc" />
+                </div>
+                <div class="col-6 mb-2">
+                    <label class="form-label">EAN</label>
+                    <input class="form-control" @bind="_ean" />
+                </div>
+                <div class="col-6 mb-2">
+                    <label class="form-label">JAN</label>
+                    <input class="form-control" @bind="_jan" />
+                </div>
+                <div class="col-6 mb-2">
+                    <label class="form-label">ISBN</label>
+                    <input class="form-control" @bind="_isbn" />
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label">Kategoriler</label>
+                <div class="border rounded p-2" style="max-height: 220px; overflow-y: auto;">
+                    @foreach (var option in _categoryOptions)
+                    {
+                        <div class="form-check" style="margin-left: @(option.Depth * 16)px;">
+                            <input class="form-check-input" type="checkbox" id="cat-@option.Id"
+                                   checked="@_selectedCategoryIds.Contains(option.Id)"
+                                   @onchange="e => ToggleCategory(option.Id, (bool)e.Value!)" />
+                            <label class="form-check-label" for="cat-@option.Id">@option.Name</label>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <p class="text-danger mt-2">@_errorMessage</p>
+    }
+
+    <button class="btn btn-success mt-3" @onclick="SaveAsync">Kaydet</button>
+    <a class="btn btn-secondary ms-2 mt-3" href="/admin/ecommerce/products">Vazgeç</a>
+
+    @if (!IsNew)
+    {
+        <hr class="mt-4" />
+        <h4>Görseller</h4>
+
+        <InputFile OnChange="UploadImageAsync" accept="image/*" class="form-control mb-3" style="max-width: 400px;" />
+        @if (_uploadingImage)
+        {
+            <p class="text-muted">Yükleniyor...</p>
+        }
+        @if (_imageError is not null)
+        {
+            <p class="text-danger">@_imageError</p>
+        }
+
+        <div class="d-flex flex-wrap gap-3">
+            @foreach (var image in _images)
+            {
+                <div class="card" style="width: 160px;">
+                    <img src="@image.Url" class="card-img-top" style="height: 120px; object-fit: cover;" />
+                    <div class="card-body p-2">
+                        @if (image.IsPrimary)
+                        {
+                            <span class="badge bg-success-subtle text-success mb-1">Ana Görsel</span>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-outline-primary d-block w-100 mb-1" @onclick="() => SetPrimaryAsync(image.Id)">Ana Görsel Yap</button>
+                        }
+                        <button class="btn btn-sm btn-outline-danger d-block w-100" @onclick="() => RemoveImageAsync(image.Id)">Sil</button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <hr class="mt-4" />
+        <h4>Videolar</h4>
+        <p class="text-muted">Ör. YouTube/Vimeo bağlantısı - ürün tanıtım videosu.</p>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive table-card">
+                    <table class="table table-nowrap align-middle mb-0" style="max-width: 700px;">
+                        <thead><tr><th>Bağlantı</th><th>Başlık</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var video in _videos)
+                            {
+                                <tr>
+                                    <td><a href="@video.Url" target="_blank">@video.Url</a></td>
+                                    <td>@video.Title</td>
+                                    <td><button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveVideoAsync(video.Id)">Sil</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-2" style="max-width: 700px;">
+            <div class="col">
+                <input class="form-control form-control-sm" placeholder="Video bağlantısı (URL)" @bind="_newVideoUrl" />
+            </div>
+            <div class="col">
+                <input class="form-control form-control-sm" placeholder="Başlık (opsiyonel)" @bind="_newVideoTitle" />
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-sm btn-success" @onclick="AddVideoAsync">Ekle</button>
+            </div>
+        </div>
+        @if (_videoError is not null)
+        {
+            <p class="text-danger mt-1">@_videoError</p>
+        }
+
+        <hr class="mt-4" />
+        <h4>İlgili Ürünler</h4>
+        <p class="text-muted">Ürün detay sayfasında "Benzer Ürünler" olarak gösterilir (yalnızca Aktif olanlar).</p>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive table-card">
+                    <table class="table table-nowrap align-middle mb-0" style="max-width: 700px;">
+                        <thead><tr><th>Ürün</th><th>Durum</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var related in _relatedProducts)
+                            {
+                                <tr>
+                                    <td>@related.Name <span class="text-muted">(@related.ProductCode)</span></td>
+                                    <td>
+                                        @if (related.Status == ProductStatus.Active)
+                                        {
+                                            <span class="badge bg-success-subtle text-success">Aktif</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary-subtle text-secondary">@related.Status</span>
+                                        }
+                                    </td>
+                                    <td><button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveRelatedProductAsync(related.Id)">Kaldır</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-2" style="max-width: 500px;">
+            <div class="col">
+                <input class="form-control form-control-sm" placeholder="Ürün Kodu (ör. ABC-001)" @bind="_newRelatedProductCode" />
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-sm btn-success" @onclick="AddRelatedProductAsync">Ekle</button>
+            </div>
+        </div>
+        @if (_relatedProductError is not null)
+        {
+            <p class="text-danger mt-1">@_relatedProductError</p>
+        }
+
+        <hr class="mt-4" />
+        <h4>Varyantlar</h4>
+        <p class="text-muted">Ör. farklı ölçü/renk seçenekleri için ayrı SKU, fiyat farkı ve stok.</p>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive table-card">
+                    <table class="table table-nowrap align-middle mb-0" style="max-width: 800px;">
+                        <thead><tr><th>SKU</th><th>Seçenek</th><th>Fiyat Farkı (TRY)</th><th>Stok</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var variant in _variants)
+                            {
+                                <tr>
+                                    <td>@variant.Sku</td>
+                                    <td>@variant.OptionName</td>
+                                    <td>@(variant.PriceAdjustmentTry?.ToString("N2") ?? "-")</td>
+                                    <td>@variant.StockQuantity</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEditVariant(variant)">Düzenle</button>
+                                        <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => RemoveVariantAsync(variant.Id)">Sil</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-2" style="max-width: 800px;">
+            <div class="col">
+                <input class="form-control form-control-sm" placeholder="SKU" @bind="_variantSku" disabled="@_editingVariantId.HasValue" />
+            </div>
+            <div class="col">
+                <input class="form-control form-control-sm" placeholder="Seçenek adı (ör. Ölçü: 60x60)" @bind="_variantOptionName" />
+            </div>
+            <div class="col">
+                <input type="number" step="0.01" class="form-control form-control-sm" placeholder="Fiyat farkı" @bind="_variantPriceAdjustmentText" />
+            </div>
+            <div class="col">
+                <input type="number" class="form-control form-control-sm" placeholder="Stok" @bind="_variantStockQuantity" />
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-sm btn-success" @onclick="SaveVariantAsync">@(_editingVariantId.HasValue ? "Güncelle" : "Ekle")</button>
+                @if (_editingVariantId.HasValue)
+                {
+                    <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="CancelEditVariant">Vazgeç</button>
+                }
+            </div>
+        </div>
+        @if (_variantError is not null)
+        {
+            <p class="text-danger mt-1">@_variantError</p>
+        }
+
+        <hr class="mt-4" />
+        <h4>Toplu Alım İndirimi</h4>
+        <p class="text-muted">Ör. "10 adet ve üzeri" alımlarda birim fiyatı sabit bir tutara indirir.</p>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive table-card">
+                    <table class="table table-nowrap align-middle mb-0" style="max-width: 500px;">
+                        <thead><tr><th>Min. Adet</th><th>Birim Fiyat (TRY)</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var tier in _quantityDiscounts)
+                            {
+                                <tr>
+                                    <td>@tier.MinimumQuantity</td>
+                                    <td>@tier.PriceTry.ToString("N2")</td>
+                                    <td><button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveQuantityDiscountAsync(tier.Id)">Sil</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-2" style="max-width: 500px;">
+            <div class="col">
+                <input type="number" class="form-control form-control-sm" placeholder="Min. Adet" @bind="_newTierMinimumQuantity" />
+            </div>
+            <div class="col">
+                <input type="number" step="0.01" class="form-control form-control-sm" placeholder="Birim Fiyat" @bind="_newTierPriceText" />
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-sm btn-success" @onclick="AddQuantityDiscountAsync">Ekle</button>
+            </div>
+        </div>
+        @if (_quantityDiscountError is not null)
+        {
+            <p class="text-danger mt-1">@_quantityDiscountError</p>
+        }
+
+        <hr class="mt-4" />
+        <h4>Müşteri Grubu Fiyatları</h4>
+        <p class="text-muted">
+            Belirli bir müşteri grubuna özel fiyat (bkz. plan §2.6 - B2B/B2C farklı fiyatlandırma).
+            Boş bırakılıp kaydedilirse o grup için özel fiyat kaldırılır, taban fiyat gösterilir.
+        </p>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive table-card">
+                    <table class="table table-nowrap align-middle mb-0" style="max-width: 500px;">
+                        <thead><tr><th>Müşteri Grubu</th><th>Fiyat (TRY)</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var group in _customerGroups)
+                            {
+                                <tr>
+                                    <td>@group.Name</td>
+                                    <td>
+                                        <input type="number" step="0.01" class="form-control form-control-sm" style="max-width: 140px;"
+                                               value="@_groupPriceTexts.GetValueOrDefault(group.Id, "")"
+                                               @onchange="e => _groupPriceTexts[group.Id] = (string)e.Value!" />
+                                    </td>
+                                    <td><button class="btn btn-sm btn-outline-primary" @onclick="() => SaveGroupPriceAsync(group.Id)">Kaydet</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        @if (_groupPriceError is not null)
+        {
+            <p class="text-danger mt-1">@_groupPriceError</p>
+        }
+
+        <hr class="mt-4" />
+        <h4>Özellikler (Spesifikasyonlar)</h4>
+        <p class="text-muted">Ör. "Malzeme: Pamuk", "Renk: Kırmızı" - fiyatı/stoku ETKİLEMEZ, yalnızca ürün sayfasında bilgi amaçlı gösterilir.</p>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive table-card">
+                    <table class="table table-nowrap align-middle mb-0" style="max-width: 600px;">
+                        <thead><tr><th>Özellik</th><th>Değer</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var value in _attributeValues)
+                            {
+                                <tr>
+                                    <td>@value.AttributeName</td>
+                                    <td>@value.Value</td>
+                                    <td><button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveAttributeValueAsync(value.Id)">Sil</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-2" style="max-width: 600px;">
+            <div class="col">
+                <select class="form-select form-select-sm" @bind="_selectedAttributeIdText">
+                    <option value="">(Özellik türü seçin)</option>
+                    @foreach (var attributeType in _attributes)
+                    {
+                        <option value="@attributeType.Id">@attributeType.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col">
+                <input class="form-control form-control-sm" placeholder="Değer" @bind="_attributeValueText" />
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-sm btn-success" @onclick="SetAttributeValueAsync">Ekle</button>
+            </div>
+        </div>
+        <div class="row g-2 mt-1" style="max-width: 600px;">
+            <div class="col">
+                <input class="form-control form-control-sm" placeholder="Yeni özellik türü (ör. Malzeme)" @bind="_newAttributeName" />
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="CreateAttributeAsync">Özellik Türü Oluştur</button>
+            </div>
+        </div>
+        @if (_attributeError is not null)
+        {
+            <p class="text-danger mt-1">@_attributeError</p>
+        }
+    }
+}
+
+@code {
+    private string _editingLanguageCode = "tr";
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+
+    private IReadOnlyCollection<(Guid Id, string Name, int Depth)>? _categoryOptions;
+    private IReadOnlyCollection<Dekorras.Application.Catalog.Queries.BrandDto>? _brands;
+    private readonly HashSet<Guid> _selectedCategoryIds = [];
+
+    private string _name = "";
+    private string _slug = "";
+    private string _productCode = "";
+    private string? _description;
+    private string _brandIdText = "";
+    private decimal _basePriceTry;
+    private decimal _taxRatePercentage = 20;
+    private UnitOfMeasure _unitOfMeasure = UnitOfMeasure.Piece;
+    private int _minimumOrderQuantity = 1;
+    private int _stockQuantity;
+    private StockAvailability _stockAvailability;
+    private bool _trackStock = true;
+    private string _weightKgText = "";
+    private string _lengthCmText = "";
+    private string _widthCmText = "";
+    private string _heightCmText = "";
+    private string? _hsCode;
+    private string? _sku;
+    private string? _upc;
+    private string? _ean;
+    private string? _jan;
+    private string? _isbn;
+    private string? _mpn;
+    private string _metaRobots = "";
+    private string? _metaTitle;
+    private string? _metaDescription;
+    private string? _metaKeywords;
+    private string? _errorMessage;
+
+    private IReadOnlyCollection<ProductImageDto> _images = [];
+    private bool _uploadingImage;
+    private string? _imageError;
+
+    private IReadOnlyCollection<ProductVideoDto> _videos = [];
+    private string _newVideoUrl = "";
+    private string _newVideoTitle = "";
+    private IReadOnlyCollection<RelatedProductItemDto> _relatedProducts = [];
+    private string _newRelatedProductCode = "";
+    private string? _relatedProductError;
+    private string? _videoError;
+
+    private IReadOnlyCollection<ProductVariantDto> _variants = [];
+    private Guid? _editingVariantId;
+    private string _variantSku = "";
+    private string _variantOptionName = "";
+    private string _variantPriceAdjustmentText = "";
+    private int _variantStockQuantity;
+    private string? _variantError;
+
+    private IReadOnlyCollection<QuantityDiscountDto> _quantityDiscounts = [];
+    private int _newTierMinimumQuantity;
+    private string _newTierPriceText = "";
+    private string? _quantityDiscountError;
+
+    private IReadOnlyCollection<Dekorras.Application.Customers.Queries.CustomerGroupDto> _customerGroups = [];
+    private readonly Dictionary<Guid, string> _groupPriceTexts = new();
+    private string? _groupPriceError;
+
+    private IReadOnlyCollection<ProductAttributeDto> _attributes = [];
+    private IReadOnlyCollection<ProductAttributeValueDto> _attributeValues = [];
+    private string _selectedAttributeIdText = "";
+    private string _attributeValueText = "";
+    private string _newAttributeName = "";
+    private string? _attributeError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var tree = await Sender.Send(new GetCategoryTreeQuery(_editingLanguageCode));
+        _categoryOptions = Flatten(tree, 0).ToList();
+        _brands = await Sender.Send(new GetBrandsQuery());
+        _attributes = await Sender.Send(new GetProductAttributesQuery());
+
+        if (Id is Guid id)
+        {
+            var detail = await Sender.Send(new GetProductByIdQuery(id, _editingLanguageCode));
+            if (detail is null) return;
+
+            _name = detail.Name;
+            _slug = detail.Slug;
+            _productCode = detail.ProductCode;
+            _description = detail.Description;
+            _brandIdText = detail.BrandId?.ToString() ?? "";
+            _basePriceTry = detail.BasePriceTry;
+            _taxRatePercentage = detail.TaxRatePercentage;
+            _unitOfMeasure = detail.UnitOfMeasure;
+            _minimumOrderQuantity = detail.MinimumOrderQuantity;
+            _stockQuantity = detail.StockQuantity;
+            _stockAvailability = detail.StockAvailability;
+            _trackStock = detail.TrackStock;
+            _weightKgText = detail.WeightKg?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+            _lengthCmText = detail.LengthCm?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+            _widthCmText = detail.WidthCm?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+            _heightCmText = detail.HeightCm?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+            _hsCode = detail.HsCode;
+            _sku = detail.Sku;
+            _upc = detail.Upc;
+            _ean = detail.Ean;
+            _jan = detail.Jan;
+            _isbn = detail.Isbn;
+            _mpn = detail.Mpn;
+            _metaRobots = detail.MetaRobots ?? "";
+            _metaTitle = detail.MetaTitle;
+            _metaDescription = detail.MetaDescription;
+            _metaKeywords = detail.MetaKeywords;
+            foreach (var categoryId in detail.CategoryIds)
+                _selectedCategoryIds.Add(categoryId);
+
+            await LoadImagesAsync(id);
+            await LoadVideosAsync(id);
+            await LoadRelatedProductsAsync(id);
+            await LoadVariantsAsync(id);
+            await LoadQuantityDiscountsAsync(id);
+            await LoadAttributeValuesAsync(id);
+            await LoadCustomerGroupPricesAsync(id);
+        }
+    }
+
+    private async Task LoadCustomerGroupPricesAsync(Guid productId)
+    {
+        _customerGroups = await Sender.Send(new Dekorras.Application.Customers.Queries.GetCustomerGroupsQuery());
+        var groupPrices = await Sender.Send(new GetProductGroupPricesQuery(productId));
+        _groupPriceTexts.Clear();
+        foreach (var gp in groupPrices)
+            _groupPriceTexts[gp.CustomerGroupId] = gp.PriceTry.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private async Task SaveGroupPriceAsync(Guid customerGroupId)
+    {
+        _groupPriceError = null;
+        var text = _groupPriceTexts.GetValueOrDefault(customerGroupId, "").Trim();
+
+        if (string.IsNullOrEmpty(text))
+        {
+            await Sender.Send(new RemoveProductGroupPriceCommand(Id!.Value, customerGroupId));
+        }
+        else if (decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var price) && price > 0)
+        {
+            await Sender.Send(new SetProductGroupPriceCommand(Id!.Value, customerGroupId, price));
+        }
+        else
+        {
+            _groupPriceError = "Geçerli bir fiyat girin veya kaldırmak için alanı boş bırakın.";
+            return;
+        }
+
+        await LoadCustomerGroupPricesAsync(Id!.Value);
+    }
+
+    private async Task LoadRelatedProductsAsync(Guid productId) =>
+        _relatedProducts = await Sender.Send(new GetRelatedProductsQuery(productId, _editingLanguageCode));
+
+    private async Task AddRelatedProductAsync()
+    {
+        if (Id is not Guid id) return;
+        _relatedProductError = null;
+
+        try
+        {
+            var candidates = await Sender.Send(new GetProductsQuery(_editingLanguageCode, CategoryId: null, Page: 1, PageSize: 1000));
+            var match = candidates.FirstOrDefault(p => string.Equals(p.ProductCode, _newRelatedProductCode, StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+            {
+                _relatedProductError = $"'{_newRelatedProductCode}' ürün kodlu bir ürün bulunamadı.";
+                return;
+            }
+
+            await Sender.Send(new AddRelatedProductCommand(id, match.Id));
+            _newRelatedProductCode = "";
+            await LoadRelatedProductsAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _relatedProductError = ex.Message;
+        }
+    }
+
+    private async Task RemoveRelatedProductAsync(Guid relatedProductId)
+    {
+        if (Id is not Guid id) return;
+        await Sender.Send(new RemoveRelatedProductCommand(id, relatedProductId));
+        await LoadRelatedProductsAsync(id);
+    }
+
+    private async Task LoadImagesAsync(Guid productId) =>
+        _images = await Sender.Send(new GetProductImagesQuery(productId));
+
+    private async Task UploadImageAsync(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        if (Id is not Guid id) return;
+
+        _uploadingImage = true;
+        _imageError = null;
+        StateHasChanged();
+
+        try
+        {
+            const long maxFileSizeBytes = 10 * 1024 * 1024;
+            var file = e.File;
+            await using var stream = file.OpenReadStream(maxFileSizeBytes);
+            await Sender.Send(new AddProductImageCommand(id, stream, file.Name, file.ContentType));
+            await LoadImagesAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _imageError = ex.Message;
+        }
+        finally
+        {
+            _uploadingImage = false;
+        }
+    }
+
+    private async Task SetPrimaryAsync(Guid imageId)
+    {
+        if (Id is not Guid id) return;
+        await Sender.Send(new SetPrimaryProductImageCommand(id, imageId));
+        await LoadImagesAsync(id);
+    }
+
+    private async Task RemoveImageAsync(Guid imageId)
+    {
+        if (Id is not Guid id) return;
+        await Sender.Send(new RemoveProductImageCommand(id, imageId));
+        await LoadImagesAsync(id);
+    }
+
+    private async Task LoadVideosAsync(Guid productId) =>
+        _videos = await Sender.Send(new GetProductVideosQuery(productId));
+
+    private async Task AddVideoAsync()
+    {
+        if (Id is not Guid id) return;
+
+        _videoError = null;
+        try
+        {
+            await Sender.Send(new AddProductVideoCommand(id, _newVideoUrl, string.IsNullOrWhiteSpace(_newVideoTitle) ? null : _newVideoTitle));
+            _newVideoUrl = "";
+            _newVideoTitle = "";
+            await LoadVideosAsync(id);
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _videoError = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+
+    private async Task RemoveVideoAsync(Guid videoId)
+    {
+        if (Id is not Guid id) return;
+        await Sender.Send(new RemoveProductVideoCommand(id, videoId));
+        await LoadVideosAsync(id);
+    }
+
+    private async Task LoadVariantsAsync(Guid productId) =>
+        _variants = await Sender.Send(new GetProductVariantsQuery(productId));
+
+    private void StartEditVariant(ProductVariantDto variant)
+    {
+        _editingVariantId = variant.Id;
+        _variantSku = variant.Sku;
+        _variantOptionName = variant.OptionName;
+        _variantPriceAdjustmentText = variant.PriceAdjustmentTry?.ToString() ?? "";
+        _variantStockQuantity = variant.StockQuantity;
+        _variantError = null;
+    }
+
+    private void CancelEditVariant()
+    {
+        _editingVariantId = null;
+        _variantSku = "";
+        _variantOptionName = "";
+        _variantPriceAdjustmentText = "";
+        _variantStockQuantity = 0;
+        _variantError = null;
+    }
+
+    private async Task SaveVariantAsync()
+    {
+        if (Id is not Guid id) return;
+
+        decimal? priceAdjustment = decimal.TryParse(_variantPriceAdjustmentText, out var parsed) ? parsed : null;
+
+        try
+        {
+            if (_editingVariantId is Guid variantId)
+                await Sender.Send(new UpdateProductVariantCommand(id, variantId, _variantOptionName, priceAdjustment, _variantStockQuantity));
+            else
+                await Sender.Send(new AddProductVariantCommand(id, _variantSku, _variantOptionName, priceAdjustment, _variantStockQuantity));
+
+            CancelEditVariant();
+            await LoadVariantsAsync(id);
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _variantError = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+
+    private async Task RemoveVariantAsync(Guid variantId)
+    {
+        if (Id is not Guid id) return;
+        await Sender.Send(new RemoveProductVariantCommand(id, variantId));
+        await LoadVariantsAsync(id);
+    }
+
+    private async Task LoadQuantityDiscountsAsync(Guid productId) =>
+        _quantityDiscounts = await Sender.Send(new GetProductQuantityDiscountsQuery(productId));
+
+    private async Task AddQuantityDiscountAsync()
+    {
+        if (Id is not Guid id) return;
+
+        _quantityDiscountError = null;
+        if (!decimal.TryParse(_newTierPriceText, out var priceTry))
+        {
+            _quantityDiscountError = "Geçerli bir birim fiyat girin.";
+            return;
+        }
+
+        try
+        {
+            await Sender.Send(new AddProductQuantityDiscountCommand(id, _newTierMinimumQuantity, priceTry));
+            _newTierMinimumQuantity = 0;
+            _newTierPriceText = "";
+            await LoadQuantityDiscountsAsync(id);
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _quantityDiscountError = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+
+    private async Task RemoveQuantityDiscountAsync(Guid quantityDiscountId)
+    {
+        if (Id is not Guid id) return;
+        await Sender.Send(new RemoveProductQuantityDiscountCommand(id, quantityDiscountId));
+        await LoadQuantityDiscountsAsync(id);
+    }
+
+    private async Task LoadAttributeValuesAsync(Guid productId) =>
+        _attributeValues = await Sender.Send(new GetProductAttributeValuesQuery(productId));
+
+    private async Task CreateAttributeAsync()
+    {
+        _attributeError = null;
+        if (string.IsNullOrWhiteSpace(_newAttributeName)) return;
+
+        try
+        {
+            await Sender.Send(new CreateProductAttributeCommand(_newAttributeName));
+            _newAttributeName = "";
+            _attributes = await Sender.Send(new GetProductAttributesQuery());
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FluentValidation.ValidationException)
+        {
+            _attributeError = ex is FluentValidation.ValidationException vex
+                ? string.Join(" ", vex.Errors.Select(e => e.ErrorMessage))
+                : ex.Message;
+        }
+    }
+
+    private async Task SetAttributeValueAsync()
+    {
+        if (Id is not Guid id) return;
+
+        _attributeError = null;
+        if (!Guid.TryParse(_selectedAttributeIdText, out var attributeId))
+        {
+            _attributeError = "Bir özellik türü seçin.";
+            return;
+        }
+
+        try
+        {
+            await Sender.Send(new SetProductAttributeValueCommand(id, attributeId, _attributeValueText));
+            _attributeValueText = "";
+            await LoadAttributeValuesAsync(id);
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _attributeError = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+
+    private async Task RemoveAttributeValueAsync(Guid attributeValueId)
+    {
+        if (Id is not Guid id) return;
+        await Sender.Send(new RemoveProductAttributeValueCommand(id, attributeValueId));
+        await LoadAttributeValuesAsync(id);
+    }
+
+    private static IEnumerable<(Guid Id, string Name, int Depth)> Flatten(IReadOnlyCollection<CategoryTreeItemDto> nodes, int depth)
+    {
+        foreach (var node in nodes)
+        {
+            yield return (node.Id, node.Name, depth);
+            foreach (var descendant in Flatten(node.Children, depth + 1))
+                yield return descendant;
+        }
+    }
+
+    private void ToggleCategory(Guid categoryId, bool isChecked)
+    {
+        if (isChecked) _selectedCategoryIds.Add(categoryId);
+        else _selectedCategoryIds.Remove(categoryId);
+    }
+
+    /// <summary>Fiyat/stok/kategori gibi dilden BAĞIMSIZ alanlara dokunmaz - yalnızca Ad/Açıklama/Meta
+    /// alanlarını seçilen dilin çevirisiyle (yoksa boş) yeniden doldurur.</summary>
+    private async Task OnEditingLanguageChangedAsync()
+    {
+        if (Id is not Guid id) return;
+
+        var detail = await Sender.Send(new GetProductByIdQuery(id, _editingLanguageCode));
+        if (detail is null) return;
+
+        // GetProductByIdQuery çeviri yoksa Name'e ProductCode'u düşürür (bkz. sorgu) - burada bunu
+        // BOŞ göstermek daha doğru, aksi halde admin "İngilizce adı zaten var" sanabilir.
+        _name = detail.Name == detail.ProductCode ? "" : detail.Name;
+        _description = detail.Description;
+        _metaTitle = detail.MetaTitle;
+        _metaDescription = detail.MetaDescription;
+        _metaKeywords = detail.MetaKeywords;
+    }
+
+    private async Task SaveStockSettingsAsync()
+    {
+        if (Id is not Guid id) return;
+        await Sender.Send(new SetProductTrackStockCommand(id, _trackStock));
+        await Sender.Send(new SetProductStockAvailabilityCommand(id, _stockAvailability));
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            Guid? brandId = Guid.TryParse(_brandIdText, out var parsedBrandId) ? parsedBrandId : null;
+            decimal? weightKg = decimal.TryParse(_weightKgText, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsedWeight) ? parsedWeight : null;
+            decimal? lengthCm = decimal.TryParse(_lengthCmText, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsedLength) ? parsedLength : null;
+            decimal? widthCm = decimal.TryParse(_widthCmText, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsedWidth) ? parsedWidth : null;
+            decimal? heightCm = decimal.TryParse(_heightCmText, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsedHeight) ? parsedHeight : null;
+
+            var metaRobots = string.IsNullOrWhiteSpace(_metaRobots) ? null : _metaRobots;
+
+            if (IsNew)
+            {
+                await Sender.Send(new CreateProductCommand(
+                    _slug, _productCode, _basePriceTry, _taxRatePercentage, _unitOfMeasure, _minimumOrderQuantity, _stockQuantity,
+                    brandId, _selectedCategoryIds.ToList(), _editingLanguageCode, _name, _description, _metaTitle, _metaDescription, _metaKeywords, weightKg,
+                    _hsCode, lengthCm, widthCm, heightCm, _sku, _upc, _ean, _jan, _isbn, _mpn, metaRobots));
+            }
+            else
+            {
+                await Sender.Send(new UpdateProductCommand(Id!.Value, _slug, _productCode, _basePriceTry, _taxRatePercentage,
+                    _unitOfMeasure, _minimumOrderQuantity, _stockQuantity, brandId, _selectedCategoryIds.ToList(), _editingLanguageCode, _name, _description,
+                    _metaTitle, _metaDescription, _metaKeywords, weightKg, _hsCode, lengthCm, widthCm, heightCm, _sku, _upc, _ean, _jan, _isbn, _mpn, metaRobots));
+            }
+
+            NavigationManager.NavigateTo("/admin/ecommerce/products");
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _errorMessage = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+}

@@ -1,0 +1,148 @@
+/* Header (üst bar + ana satır + mega-menü satırı) ve footer düzeni. */
+
+/* --- Üst bar --- */
+.dk-topbar {
+    background-color: var(--dk-color-text);
+    color: #cfcfcf;
+    min-height: var(--dk-topbar-height);
+    font-size: 0.8rem;
+}
+
+.dk-topbar a {
+    color: #cfcfcf;
+    text-decoration: none;
+}
+
+.dk-topbar a:hover {
+    color: #fff;
+}
+
+.dk-topbar .form-select {
+    background-color: transparent;
+    color: #cfcfcf;
+    border-color: rgba(255, 255, 255, 0.25);
+    font-size: 0.8rem;
+    padding-top: 0.15rem;
+    padding-bottom: 0.15rem;
+}
+
+/* --- Ana header (logo/arama/hesap-sepet) --- */
+.dk-header {
+    position: sticky;
+    top: 0;
+    z-index: var(--dk-z-header);
+    background-color: var(--dk-color-bg);
+    min-height: var(--dk-header-height);
+    display: flex;
+    align-items: center;
+    box-shadow: var(--dk-shadow-sm);
+    transition: min-height var(--dk-transition), padding var(--dk-transition);
+}
+
+.dk-header--compact {
+    min-height: var(--dk-header-height-compact);
+}
+
+.dk-header .navbar-brand {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--dk-color-primary-dark);
+    white-space: nowrap;
+}
+
+.dk-header--compact .navbar-brand {
+    font-size: 1.15rem;
+}
+
+/* --- Mega-menü satırı (bkz. mega-menu.css) --- */
+/* Gerçek dekorras.com'daki turuncu vurgulu kategori çubuğuyla görsel parite için (bkz.
+   README/hafıza - önceki açık gri versiyon buradaydı) marka rengine (--dk-color-primary)
+   çevrildi - yeni bir renk İCAT EDİLMEDİ, zaten variables.css'te dekorras.com'dan çıkarılmış
+   marka paleti kullanıldı. */
+.dk-mega-nav {
+    background-color: var(--dk-color-primary);
+    border: none;
+}
+
+/* Hesabım/Sepetim üst satır butonları - dekorras.com'daki dolgulu/pill vurgusuyla tutarlı.
+   Bootstrap'in ".text-dark" utility'si (!important ile) aynı elemanda olduğu için override
+   etmek üzere burada da !important gerekiyor - başka bir yol yok, bilinçli bir istisna. */
+.dk-header .navbar-nav > li.dropdown > a.nav-link,
+.dk-header .navbar-nav > li.nav-item:last-child > a.nav-link {
+    background-color: var(--dk-color-primary);
+    color: #fff !important;
+    border-radius: 999px;
+    padding: 0.45rem 1rem;
+    transition: background-color var(--dk-transition);
+}
+
+.dk-header .navbar-nav > li.dropdown > a.nav-link:hover,
+.dk-header .navbar-nav > li.nav-item:last-child > a.nav-link:hover {
+    background-color: var(--dk-color-primary-dark);
+    color: #fff !important;
+}
+
+/* --- Footer --- */
+.dk-footer {
+    background-color: #222222;
+    color: #b7b7b7;
+    margin-top: 3rem;
+}
+
+.dk-footer a {
+    color: #b7b7b7;
+    text-decoration: none;
+}
+
+.dk-footer a:hover {
+    color: #fff;
+}
+
+.dk-footer h5 {
+    color: #fff;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+
+.dk-footer-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1.5rem;
+    padding: 2.5rem 0;
+}
+
+.dk-footer-columns ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.dk-footer-columns li {
+    margin-bottom: 0.5rem;
+}
+
+.dk-footer-social {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.dk-footer-social a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.08);
+    font-size: 1.1rem;
+}
+
+.dk-footer-social a:hover {
+    background-color: var(--dk-color-primary);
+}
+
+.dk-footer-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1rem 0;
+    font-size: 0.85rem;
+}

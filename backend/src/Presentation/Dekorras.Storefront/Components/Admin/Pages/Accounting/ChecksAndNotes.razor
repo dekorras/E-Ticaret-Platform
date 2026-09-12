@@ -1,0 +1,147 @@
+﻿@page "/admin/accounting/checks-and-notes"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@using Dekorras.Application.Accounting.Queries
+@using Dekorras.Domain.Accounting
+@inject MediatR.ISender Sender
+
+<PageTitle>Çek &amp; Senet</PageTitle>
+
+<a class="btn btn-secondary mb-3" href="/admin/accounting">← Muhasebe Modülü</a>
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Çek &amp; Senet</h4>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="d-flex align-items-center justify-content-between">
+            <h4>Çekler</h4>
+            <a class="btn btn-primary btn-sm" href="/admin/accounting/checks/new">+ Yeni Çek</a>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive table-card">
+                    <table class="table table-nowrap align-middle mb-0">
+                        <thead><tr><th>No</th><th>Cari</th><th>Tutar</th><th>Vade</th><th>Durum</th><th></th></tr></thead>
+                        <tbody>
+                            @if (_checks is not null)
+                            {
+                                @foreach (var check in _checks)
+                                {
+                                    <tr>
+                                        <td>@check.CheckNumber</td>
+                                        <td>@check.LedgerAccountName</td>
+                                        <td>@check.AmountTry.ToString("N2") ₺</td>
+                                        <td>@check.DueDateUtc.ToString("dd.MM.yyyy")</td>
+                                        <td><span class="badge @StatusBadgeClass(check.Status)">@StatusLabel(check.Status)</span></td>
+                                        <td>
+                                            @if (check.Status == PaperInstrumentStatus.Pending)
+                                            {
+                                                <button class="btn btn-sm btn-outline-success" @onclick="() => MarkCheckCollectedAsync(check.Id)">Tahsil Et</button>
+                                                <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => MarkCheckBouncedAsync(check.Id)">Karşılıksız</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="col-md-6">
+        <div class="d-flex align-items-center justify-content-between">
+            <h4>Senetler</h4>
+            <a class="btn btn-primary btn-sm" href="/admin/accounting/promissory-notes/new">+ Yeni Senet</a>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive table-card">
+                    <table class="table table-nowrap align-middle mb-0">
+                        <thead><tr><th>No</th><th>Cari</th><th>Tutar</th><th>Vade</th><th>Durum</th><th></th></tr></thead>
+                        <tbody>
+                            @if (_notes is not null)
+                            {
+                                @foreach (var note in _notes)
+                                {
+                                    <tr>
+                                        <td>@note.NoteNumber</td>
+                                        <td>@note.LedgerAccountName</td>
+                                        <td>@note.AmountTry.ToString("N2") ₺</td>
+                                        <td>@note.DueDateUtc.ToString("dd.MM.yyyy")</td>
+                                        <td><span class="badge @StatusBadgeClass(note.Status)">@StatusLabel(note.Status)</span></td>
+                                        <td>
+                                            @if (note.Status == PaperInstrumentStatus.Pending)
+                                            {
+                                                <button class="btn btn-sm btn-outline-success" @onclick="() => MarkNoteCollectedAsync(note.Id)">Tahsil Et</button>
+                                                <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => MarkNoteBouncedAsync(note.Id)">Karşılıksız</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private IReadOnlyCollection<CheckDto>? _checks;
+    private IReadOnlyCollection<PromissoryNoteDto>? _notes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadChecksAsync();
+        await LoadNotesAsync();
+    }
+
+    private async Task LoadChecksAsync() => _checks = await Sender.Send(new GetChecksQuery());
+    private async Task LoadNotesAsync() => _notes = await Sender.Send(new GetPromissoryNotesQuery());
+
+    private async Task MarkCheckCollectedAsync(Guid checkId)
+    {
+        await Sender.Send(new MarkCheckCollectedCommand(checkId));
+        await LoadChecksAsync();
+    }
+
+    private async Task MarkCheckBouncedAsync(Guid checkId)
+    {
+        await Sender.Send(new MarkCheckBouncedCommand(checkId));
+        await LoadChecksAsync();
+    }
+
+    private async Task MarkNoteCollectedAsync(Guid noteId)
+    {
+        await Sender.Send(new MarkPromissoryNoteCollectedCommand(noteId));
+        await LoadNotesAsync();
+    }
+
+    private async Task MarkNoteBouncedAsync(Guid noteId)
+    {
+        await Sender.Send(new MarkPromissoryNoteBouncedCommand(noteId));
+        await LoadNotesAsync();
+    }
+
+    private static string StatusBadgeClass(PaperInstrumentStatus status) => status switch
+    {
+        PaperInstrumentStatus.Collected => "bg-success-subtle text-success",
+        PaperInstrumentStatus.Bounced => "bg-danger-subtle text-danger",
+        _ => "bg-secondary-subtle text-secondary"
+    };
+
+    private static string StatusLabel(PaperInstrumentStatus status) => status switch
+    {
+        PaperInstrumentStatus.Pending => "Beklemede",
+        PaperInstrumentStatus.Collected => "Tahsil Edildi",
+        PaperInstrumentStatus.Bounced => "Karşılıksız",
+        _ => status.ToString()
+    };
+}

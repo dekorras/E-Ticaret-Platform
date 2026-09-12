@@ -1,0 +1,29 @@
+/* Arapça (RTL) düzeltmeleri - yalnızca dir="rtl" olduğunda yüklenir.
+   Mega-menü panelinin varsayılan sol hizalaması RTL'de sağa çevrilir. */
+.dk-mega-panel {
+    left: auto;
+    right: 0;
+}
+
+.dk-footer-social {
+    direction: ltr;
+}
+
+/* Mobil mega-menü akordeonunun girinti kenarı (bkz. mega-menu.css) RTL'de sağa döner. */
+@media (max-width: 991.98px) {
+    .dk-mega-panel {
+        padding: 0.5rem 1rem 0.5rem 0;
+    }
+}
+
+/* Ürün galerisi büyüteç ikonu (bkz. product-detail.css) RTL'de sol köşeye taşınır. */
+.dk-gallery-zoom-hint {
+    right: auto;
+    left: 0.75rem;
+}
+
+/* Yönlü "geri" oku (bkz. Account/OrderDetail.cshtml) RTL'de ters çevrilir. */
+[dir="rtl"] .dk-back-link .bi-arrow-left {
+    display: inline-block;
+    transform: scaleX(-1);
+}

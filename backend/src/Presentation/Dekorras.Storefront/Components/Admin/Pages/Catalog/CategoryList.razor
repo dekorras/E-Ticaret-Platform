@@ -1,0 +1,246 @@
+@page "/admin/ecommerce/categories"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Catalog.Commands
+@using Dekorras.Application.Catalog.Queries
+@using Dekorras.Application.Common
+@inject MediatR.ISender Sender
+@inject IJSRuntime JS
+
+<PageTitle>Kategoriler</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Kategoriler</h4>
+    <a class="btn btn-primary" href="/admin/ecommerce/categories/new">+ Yeni Kök Kategori</a>
+</div>
+<p class="text-muted">
+    Kategori ağacı sınırsız derinliktedir - "Ad" sütunundaki girinti ve "Üst Kategori" sütunu
+    hiyerarşiyi gösterir. Liste VARSAYILAN olarak üst-alt sırasına göre (her kategori kendi alt
+    kategorilerinin HEMEN üstünde) dizilir - bu sıra DataTables'ın kendi otomatik ilk-sütun
+    sıralamasından BİLİNÇLİ OLARAK korunmuştur. Bir sütun başlığına tıklarsanız o sütuna göre
+    sıralanır; aynı başlığa 3. kez tıklayınca (asc → desc → özgün sıra) hiyerarşik görünüme geri
+    dönersiniz. Sıra değiştirmek için ↑/↓ düğmeleri (yalnızca AYNI ebeveynin kardeşleri arasında)
+    kullanılır - <code>MoveCategoryCommand</code>.
+</p>
+
+<div class="row g-2 mb-3 align-items-end">
+    <div class="col-auto">
+        <label class="form-label small mb-0">Görüntülenen Dil</label>
+        <select class="form-select form-select-sm" style="width: 180px;" @bind="_editingLanguageCode" @bind:after="LoadAsync">
+            @foreach (var language in SupportedLanguages.All)
+            {
+                <option value="@language.Code">@language.DisplayName</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Durum</label>
+        <select class="form-select form-select-sm" style="width: 140px;" @bind="_statusFilter" @bind:after="ApplyStatusFilterAsync">
+            <option value="">Tümü</option>
+            <option value="Aktif">Aktif</option>
+            <option value="Pasif">Pasif</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Anasayfa</label>
+        <select class="form-select form-select-sm" style="width: 190px;" @bind="_featuredFilter" @bind:after="ApplyFeaturedFilterAsync">
+            <option value="">Tümü</option>
+            <option value="Anasayfada">Anasayfada Gösterilenler</option>
+            <option value="—">Gösterilmeyenler</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Üst Kategori</label>
+        <select class="form-select form-select-sm" style="width: 220px;" @bind="_parentFilter" @bind:after="ApplyParentFilterAsync">
+            <option value="">Tümü</option>
+            <option value="—">Yalnızca Kök Kategoriler</option>
+            @foreach (var parentName in _parentOptions)
+            {
+                <option value="@parentName">@parentName</option>
+            }
+        </select>
+    </div>
+    @if (_statusFilter != "" || _featuredFilter != "" || _parentFilter != "")
+    {
+        <div class="col-auto">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="ClearFiltersAsync">Filtreleri Temizle</button>
+        </div>
+    }
+</div>
+
+@if (_tree is null)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_tree.Count == 0)
+{
+    <p class="text-muted">Henüz kategori yok.</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table id="categoriesTable" class="table table-nowrap align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Ad</th>
+                            <th>Üst Kategori</th>
+                            <th>Slug</th>
+                            <th>Sıra</th>
+                            <th>Durum</th>
+                            <th>Anasayfa</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _flatRows)
+                        {
+                            <tr>
+                                @* Girinti METİN İÇİNE değil, satır-içi padding-left ile veriliyor -
+                                   böylece DataTables'ın arama kutusu "Ad" sütununda yalnızca GERÇEK
+                                   kategori adını görür, girinti karakterleri aramayı bozmaz.
+                                   CultureInfo.InvariantCulture ŞART - kültür ondalık ayıracı Türkçe'de
+                                   virgül olduğu için (ör. "2,5rem") bu olmadan GEÇERSİZ bir CSS
+                                   değeri üretilir ve tarayıcı TÜM padding-left'i sessizce YOK SAYAR. *@
+                                <td style="padding-left: @((1 + row.Depth * 1.5).ToString(System.Globalization.CultureInfo.InvariantCulture))rem;">
+                                    <span class="@(row.Node.IsActive ? "" : "text-muted text-decoration-line-through")">@row.Node.Name</span>
+                                </td>
+                                <td class="text-muted">@(row.ParentName ?? "—")</td>
+                                <td><code>@row.Node.Slug</code></td>
+                                <td>@row.Node.DisplayOrder</td>
+                                <td>
+                                    <span class="badge @(row.Node.IsActive ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")">@(row.Node.IsActive ? "Aktif" : "Pasif")</span>
+                                </td>
+                                <td>
+                                    @if (row.Node.IsFeaturedOnHomepage)
+                                    {
+                                        <span class="badge bg-info-subtle text-info">Anasayfada</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td class="text-nowrap">
+                                    <button class="btn btn-sm btn-outline-secondary" title="Yukarı taşı (aynı ebeveyn içinde)" @onclick="() => MoveAsync((row.Node.Id, MoveDirection.Up))">↑</button>
+                                    <button class="btn btn-sm btn-outline-secondary" title="Aşağı taşı (aynı ebeveyn içinde)" @onclick="() => MoveAsync((row.Node.Id, MoveDirection.Down))">↓</button>
+                                    <a class="btn btn-sm btn-outline-primary" href="@($"/admin/ecommerce/categories/new?parentId={row.Node.Id}")">+ Alt</a>
+                                    <a class="btn btn-sm btn-outline-primary" href="@($"/admin/ecommerce/categories/{row.Node.Id}")">Düzenle</a>
+                                    @if (row.Node.IsActive)
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => ToggleActiveAsync((row.Node.Id, false))">Pasife Al</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-success" @onclick="() => ToggleActiveAsync((row.Node.Id, true))">Aktifleştir</button>
+                                    }
+                                    @if (row.Node.IsFeaturedOnHomepage)
+                                    {
+                                        <button class="btn btn-sm btn-outline-info" title="Bu kategoriyi anasayfa bloklarından kaldır" @onclick="() => ToggleFeaturedAsync((row.Node.Id, false))">Anasayfadan Gizle</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-info" title="Bu kategoriyi anasayfada bir blok olarak göster" @onclick="() => ToggleFeaturedAsync((row.Node.Id, true))">Anasayfada Göster</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @* PreserveServerOrder="true" - bkz. yukarıdaki açıklama metni ve DataTableScript.razor'daki
+                   yorum: bu OLMADAN DataTables ilk açılışta "Ad" sütununa göre alfabetik sıralardı,
+                   üst-alt hiyerarşi sırasını ANINDA bozardı. *@
+                <DataTableScript TableId="categoriesTable" ReloadToken="_tree" PreserveServerOrder="true" />
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _editingLanguageCode = "tr";
+    private string _statusFilter = "";
+    private string _featuredFilter = "";
+    private string _parentFilter = "";
+
+    private IReadOnlyCollection<CategoryTreeItemDto>? _tree;
+    private List<FlatCategoryRow> _flatRows = [];
+    private List<string> _parentOptions = [];
+
+    private sealed record FlatCategoryRow(CategoryTreeItemDto Node, int Depth, string? ParentName);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _tree = await Sender.Send(new GetCategoryTreeQuery(_editingLanguageCode));
+        _flatRows = Flatten(_tree);
+        _parentOptions = _flatRows.Select(r => r.ParentName).Where(n => n is not null).Select(n => n!).Distinct().OrderBy(n => n).ToList();
+
+        // Dil değiştirildiğinde (kategori adları farklılaşabilir) veya liste yeniden yüklendiğinde
+        // önceki filtre seçimleri artık GEÇERSİZ/anlamsız kalabilir (ör. seçili "Üst Kategori" adı
+        // yeni dilde farklı) - filtreler sıfırlanır, kullanıcı gerekirse yeniden uygular.
+        _statusFilter = "";
+        _featuredFilter = "";
+        _parentFilter = "";
+    }
+
+    // GetCategoryTreeQuery'nin döndürdüğü hiyerarşik ağaç, ÖN-SIRALI (pre-order) gezinerek düz bir
+    // listeye çevrilir - ebeveyn her zaman kendi çocuklarından HEMEN ÖNCE gelir, bu da tablonun
+    // VARSAYILAN (DataTables'ın kendi sıralaması uygulanmadan önceki - bkz. PreserveServerOrder)
+    // sırasının hiyerarşiyi KORUMASINI sağlar.
+    private static List<FlatCategoryRow> Flatten(IReadOnlyCollection<CategoryTreeItemDto> tree)
+    {
+        var result = new List<FlatCategoryRow>();
+
+        void Walk(IEnumerable<CategoryTreeItemDto> nodes, int depth, string? parentName)
+        {
+            foreach (var node in nodes)
+            {
+                result.Add(new FlatCategoryRow(node, depth, parentName));
+                Walk(node.Children, depth + 1, node.Name);
+            }
+        }
+
+        Walk(tree, 0, null);
+        return result;
+    }
+
+    // Üç filtre dropdown'ı DataTables'ın kendi "sütun bazlı tam eşleşme arama" API'sine
+    // (dekorrasDataTable.filterColumn) doğrudan JS interop ile bağlanır - bir SUNUCU round-trip'i
+    // GEREKMEZ (veri zaten tarayıcıya yüklü), bu yüzden LoadAsync() ÇAĞRILMAZ. Sütun indeksleri
+    // yukarıdaki <thead>'in SIRASIYLA eşleşir: 4=Durum, 5=Anasayfa, 1=Üst Kategori.
+    private Task ApplyStatusFilterAsync() => JS.InvokeVoidAsync("dekorrasDataTable.filterColumn", "categoriesTable", 4, _statusFilter).AsTask();
+
+    private Task ApplyFeaturedFilterAsync() => JS.InvokeVoidAsync("dekorrasDataTable.filterColumn", "categoriesTable", 5, _featuredFilter).AsTask();
+
+    private Task ApplyParentFilterAsync() => JS.InvokeVoidAsync("dekorrasDataTable.filterColumn", "categoriesTable", 1, _parentFilter).AsTask();
+
+    private async Task ClearFiltersAsync()
+    {
+        _statusFilter = "";
+        _featuredFilter = "";
+        _parentFilter = "";
+        await JS.InvokeVoidAsync("dekorrasDataTable.filterColumn", "categoriesTable", 4, "");
+        await JS.InvokeVoidAsync("dekorrasDataTable.filterColumn", "categoriesTable", 5, "");
+        await JS.InvokeVoidAsync("dekorrasDataTable.filterColumn", "categoriesTable", 1, "");
+    }
+
+    private async Task ToggleActiveAsync((Guid Id, bool IsActive) args)
+    {
+        await Sender.Send(new SetCategoryActiveCommand(args.Id, args.IsActive));
+        await LoadAsync();
+    }
+
+    private async Task ToggleFeaturedAsync((Guid Id, bool IsFeaturedOnHomepage) args)
+    {
+        await Sender.Send(new SetCategoryFeaturedOnHomepageCommand(args.Id, args.IsFeaturedOnHomepage));
+        await LoadAsync();
+    }
+
+    private async Task MoveAsync((Guid Id, MoveDirection Direction) args)
+    {
+        await Sender.Send(new MoveCategoryCommand(args.Id, args.Direction));
+        await LoadAsync();
+    }
+}

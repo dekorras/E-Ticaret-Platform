@@ -1,0 +1,83 @@
+﻿@page "/admin/accounting/promissory-notes/new"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@using Dekorras.Application.Accounting.Queries
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Senet</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Senet</h4>
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 600px;">
+        <div class="mb-2">
+            <label class="form-label">Cari Hesap</label>
+            <select class="form-select" @bind="_newNoteLedgerAccountId">
+                <option value="">Cari Hesap Seçin</option>
+                @if (_ledgerAccounts is not null)
+                {
+                    @foreach (var account in _ledgerAccounts)
+                    {
+                        <option value="@account.Id">@account.Name</option>
+                    }
+                }
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Senet No</label>
+            <input class="form-control" @bind="_newNoteNumber" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Tutar</label>
+            <input type="number" step="0.01" class="form-control" @bind="_newNoteAmountText" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Vade</label>
+            <input type="date" class="form-control" @bind="_newNoteDueDate" />
+        </div>
+
+        @if (_noteError is not null)
+        {
+            <p class="text-danger mt-1">@_noteError</p>
+        }
+
+        <button class="btn btn-success mt-2" @onclick="CreateNoteAsync">Kaydet</button>
+        <a class="btn btn-secondary ms-2 mt-2" href="/admin/accounting/checks-and-notes">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyCollection<LedgerAccountListItemDto>? _ledgerAccounts;
+
+    private string _newNoteLedgerAccountId = "";
+    private string _newNoteNumber = "";
+    private string _newNoteAmountText = "";
+    private DateTime _newNoteDueDate = DateTime.Today;
+    private string? _noteError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _ledgerAccounts = await Sender.Send(new GetLedgerAccountsQuery());
+    }
+
+    private async Task CreateNoteAsync()
+    {
+        _noteError = null;
+        if (!Guid.TryParse(_newNoteLedgerAccountId, out var accountId)) { _noteError = "Cari hesap seçin."; return; }
+        if (!decimal.TryParse(_newNoteAmountText, out var amount)) { _noteError = "Geçerli bir tutar girin."; return; }
+
+        try
+        {
+            await Sender.Send(new CreatePromissoryNoteCommand(accountId, _newNoteNumber, amount, _newNoteDueDate.ToUniversalTime()));
+            NavigationManager.NavigateTo("/admin/accounting/checks-and-notes");
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _noteError = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+}

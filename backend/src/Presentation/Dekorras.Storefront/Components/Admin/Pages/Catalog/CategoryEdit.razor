@@ -1,0 +1,137 @@
+﻿@page "/admin/ecommerce/categories/new"
+@page "/admin/ecommerce/categories/{Id:guid}"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Catalog.Commands
+@using Dekorras.Application.Catalog.Queries
+@using Dekorras.Application.Common
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsNew ? "Yeni Kategori" : "Kategoriyi Düzenle")</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">@(IsNew ? "Yeni Kategori" : "Kategoriyi Düzenle")</h4>
+</div>
+
+<div class="mb-3" style="max-width: 300px;">
+    <label class="form-label">Düzenlenen Dil</label>
+    <select class="form-select" @bind="_editingLanguageCode" @bind:after="OnEditingLanguageChangedAsync">
+        @foreach (var language in SupportedLanguages.All)
+        {
+            <option value="@language.Code">@language.DisplayName</option>
+        }
+    </select>
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 600px;">
+        <div class="mb-2">
+            <label class="form-label">Ad</label>
+            <input class="form-control" @bind="_name" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Slug (URL)</label>
+            <input class="form-control" @bind="_slug" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Açıklama</label>
+            <textarea class="form-control" @bind="_description"></textarea>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Meta Başlık (SEO)</label>
+            <input class="form-control" @bind="_metaTitle" placeholder="Boş bırakılırsa kategori adı kullanılır" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Meta Açıklama (SEO)</label>
+            <textarea class="form-control" @bind="_metaDescription" placeholder="Boş bırakılırsa açıklama kullanılır"></textarea>
+        </div>
+
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+
+        <button class="btn btn-success" @onclick="SaveAsync">Kaydet</button>
+        <a class="btn btn-secondary ms-2" href="/admin/ecommerce/categories">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private string _editingLanguageCode = "tr";
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public Guid? ParentId { get; set; }
+
+    private bool IsNew => Id is null;
+
+    private Guid? _parentIdForNew;
+    private string _name = "";
+    private string _slug = "";
+    private string? _description;
+    private string? _metaTitle;
+    private string? _metaDescription;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id is Guid id)
+        {
+            var detail = await Sender.Send(new GetCategoryByIdQuery(id, _editingLanguageCode));
+            if (detail is null) return;
+
+            _parentIdForNew = detail.ParentCategoryId;
+            // GetCategoryByIdQuery çeviri yoksa Name'e Slug'ı düşürür (bkz. sorgu) - burada bunu BOŞ
+            // göstermek daha doğru, aksi halde admin "bu dilde ad zaten girilmiş" sanabilir.
+            _name = detail.Name == detail.Slug ? "" : detail.Name;
+            _slug = detail.Slug;
+            _description = detail.Description;
+            _metaTitle = detail.MetaTitle;
+            _metaDescription = detail.MetaDescription;
+        }
+        else
+        {
+            _parentIdForNew = ParentId;
+        }
+    }
+
+    /// <summary>Fiyat/stok gibi dilden BAĞIMSIZ alanlar burada yok ama AYNI desen (bkz. ProductEdit) -
+    /// dil değişince Ad/Açıklama/Meta alanları seçilen dilin çevirisiyle yeniden doldurulur.</summary>
+    private async Task OnEditingLanguageChangedAsync()
+    {
+        if (Id is not Guid id) return;
+
+        var detail = await Sender.Send(new GetCategoryByIdQuery(id, _editingLanguageCode));
+        if (detail is null) return;
+
+        _name = detail.Name == detail.Slug ? "" : detail.Name;
+        _description = detail.Description;
+        _metaTitle = detail.MetaTitle;
+        _metaDescription = detail.MetaDescription;
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (IsNew)
+            {
+                await Sender.Send(new CreateCategoryCommand(_slug, _parentIdForNew, DisplayOrder: 0, _editingLanguageCode, _name, _description, _metaTitle, _metaDescription));
+            }
+            else
+            {
+                await Sender.Send(new UpdateCategoryCommand(Id!.Value, _slug, _parentIdForNew, _editingLanguageCode, _name, _description, _metaTitle, _metaDescription));
+            }
+
+            NavigationManager.NavigateTo("/admin/ecommerce/categories");
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _errorMessage = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+}

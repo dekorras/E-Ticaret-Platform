@@ -1,0 +1,9 @@
+@using Dekorras.Storefront.Views.Shared.Components.BannerZone
+@model Dekorras.Application.Content.Queries.BannerZoneTreeDto
+
+<div class="dk-bnr-zone" data-zone-key="@Model.Key">
+    @foreach (var root in Model.Roots)
+    {
+        @await Html.PartialAsync("~/Views/Shared/Components/BannerZone/_Node.cshtml", new BannerNodeViewModel(root, 0))
+    }
+</div>

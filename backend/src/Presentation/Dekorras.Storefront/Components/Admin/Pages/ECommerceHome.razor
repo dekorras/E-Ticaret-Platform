@@ -1,0 +1,101 @@
+﻿@page "/admin/ecommerce"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Storefront.Components.Admin.Pages.Ordering
+@using Dekorras.Application.Ordering.Queries
+@using Dekorras.Application.SystemAdmin.Commands
+@using Dekorras.Domain.SystemAdmin
+@inject MediatR.ISender Sender
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthState
+
+<PageTitle>E-Ticaret Modülü</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">E-Ticaret Modülü</h4>
+    <a class="btn btn-secondary mb-3" href="/admin">← Modül Değiştir</a>
+</div>
+
+@if (_metrics is not null)
+{
+    <div class="row row-cols-2 row-cols-md-5 g-3 mt-1">
+        <div class="col">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="fs-4 fw-bold">@_metrics.TotalOrders</div>
+                <div class="text-muted small">Toplam Sipariş</div>
+            </div></div>
+        </div>
+        <div class="col">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="fs-4 fw-bold">@_metrics.TotalSalesTry.ToString("N0") ₺</div>
+                <div class="text-muted small">Toplam Satış</div>
+            </div></div>
+        </div>
+        <div class="col">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="fs-4 fw-bold">@_metrics.TotalCategories</div>
+                <div class="text-muted small">Toplam Kategori</div>
+            </div></div>
+        </div>
+        <div class="col">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="fs-4 fw-bold">@_metrics.TotalCustomers</div>
+                <div class="text-muted small">Toplam Müşteri</div>
+            </div></div>
+        </div>
+        <div class="col">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="fs-4 fw-bold">@_metrics.TotalActiveProducts</div>
+                <div class="text-muted small">Toplam Ürün (Aktif)</div>
+            </div></div>
+        </div>
+    </div>
+}
+
+@if (_recentOrders is not null && _recentOrders.Count > 0)
+{
+    <h2 class="h5 mt-4">Son Siparişler</h2>
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table class="table table-nowrap align-middle mb-0">
+                    <thead><tr><th>Sipariş No</th><th>Müşteri</th><th>Tarih</th><th>Tutar</th><th>Durum</th></tr></thead>
+                    <tbody>
+                        @foreach (var order in _recentOrders)
+                        {
+                            <tr>
+                                <td><a href="/admin/ecommerce/orders/@order.Id">@order.OrderNumber</a></td>
+                                <td>@order.CustomerName</td>
+                                <td>@order.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>@order.GrandTotalTry.ToString("N2") ₺</td>
+                                <td>@OrderList.StatusLabel(order.Status)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+<p class="text-muted mt-4">
+    Katalog yönetimi (kategori/marka/ürün CRUD + görseller), sipariş yönetimi (listeleme, detay,
+    durum geçişi, kargo takip no), kupon yönetimi, otomatik kampanya motoru, hediye çeki, ürün
+    değerlendirme/soru-cevap moderasyonu ve müşteri yönetimi (liste, detay, adresler, sipariş
+    geçmişi, aktif/pasif etme) çalışır durumdadır.
+</p>
+
+@code {
+    private ECommerceDashboardMetricsDto? _metrics;
+    private IReadOnlyCollection<OrderListItemDto>? _recentOrders;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (userId is not null)
+            await Sender.Send(new SetLastSelectedModuleCommand(userId, AppModule.ECommerce));
+
+        _metrics = await Sender.Send(new GetECommerceDashboardMetricsQuery());
+        _recentOrders = await Sender.Send(new GetOrdersQuery(Page: 1, PageSize: 5));
+    }
+}

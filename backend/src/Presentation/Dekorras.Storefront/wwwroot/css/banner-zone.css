@@ -1,0 +1,155 @@
+/* BannerZone dinamik anasayfa/bölge oluşturucusu için görsel destek stilleri (bkz. plan - Admin'de
+   sürükle-bırak ile kurulan Satır/Sütun/İçerik ağacı burada render ediliyor). Grid'in kendisi
+   Bootstrap'in .row/.col-* sınıfları + BannerCssBuilder'ın ürettiği satır-içi style ile geliyor,
+   bu dosya sadece boşluk/tipografi/hover gibi ince ayarları ekliyor - variables.css'teki --dk-*
+   token'ları kullanır, yeni bir token icat edilmedi. */
+
+.dk-bnr-zone {
+    margin-bottom: 2rem;
+}
+
+/* Alt alta gelen kök satırlar arasına boşluk - iç içe (nested) satırlarda tekrar tekrar
+   büyük boşluk oluşmasın diye sadece zone'un doğrudan çocuğu olan satırlara uygulanır. */
+.dk-bnr-zone > .dk-bnr-row {
+    margin-bottom: 1.5rem;
+}
+
+.dk-bnr-zone > .dk-bnr-row:last-child {
+    margin-bottom: 0;
+}
+
+.dk-bnr-col {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+
+/* Admin, farklı en-boy oranlı GERÇEK ürün/kampanya görselleri yükleyebiliyor (ör. ürün fotoğrafı
+   yatay/dikey/kare karışık) - yalnızca "width:100%;height:auto" bırakılırsa dar bir kolona (ör.
+   admin'in ayarladığı col-lg-2 gibi) düşen bir görsel MİNİCİK ve garip oranlı görünür. Sabit bir
+   min-height + object-fit:cover, görsel HANGİ boyutta/oranda olursa olsun kolonun kendisi kadar
+   dolduran, kırpılan ama deforme OLMAYAN tutarlı bir kutu garanti eder - anasayfanın kendi hero
+   carousel'iyle (.dk-hero, home.css'teki max-height:400px) aynı fikir. */
+.dk-bnr-image img,
+.dk-bnr-overlay-wrap img,
+.dk-bnr-slider img {
+    width: 100%;
+    height: auto;
+    min-height: 120px;
+    max-height: 480px;
+    object-fit: cover;
+    display: block;
+    border-radius: var(--dk-radius);
+}
+
+/* "Görsel" içerik tipinin "Alternatif Metin" alanı doluysa görselin üzerine bindirilen metin
+   katmanı - ImageWithOverlay'in KARARTMALI (.dk-bnr-overlay) sürümünden BİLEREK farklı: burada
+   arka plan karartması YOK, yalnızca konumlandırılmış metin (admin renk/hizalamayı kendisi
+   seçiyor, karartma dayatmak istemedik). .dk-bnr-image/.carousel-item zaten position:relative
+   (ikincisi Bootstrap'in kendi carousel CSS'inden) taşıdığı için bu mutlak konumlanabiliyor. */
+.dk-bnr-image {
+    position: relative;
+}
+
+.dk-bnr-image-text-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 1rem;
+    pointer-events: none;
+}
+
+.dk-bnr-image-text-overlay span {
+    font-family: var(--dk-font-heading);
+    font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.dk-bnr-heading {
+    font-family: var(--dk-font-heading);
+    color: var(--dk-color-text);
+}
+
+.dk-bnr-subtitle {
+    color: var(--dk-color-muted);
+    margin-top: 0.25rem;
+}
+
+.dk-bnr-text {
+    font-family: var(--dk-font-body);
+    color: var(--dk-color-text);
+    line-height: 1.6;
+}
+
+.dk-bnr-btn {
+    transition: box-shadow var(--dk-transition), transform var(--dk-transition);
+}
+
+.dk-bnr-btn:hover {
+    box-shadow: var(--dk-shadow-sm);
+    transform: translateY(-1px);
+}
+
+.dk-bnr-linklist {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin: 0;
+    padding: 0;
+}
+
+.dk-bnr-linklist a {
+    color: var(--dk-color-text);
+    text-decoration: none;
+}
+
+.dk-bnr-linklist a:hover {
+    color: var(--dk-color-primary);
+}
+
+.dk-bnr-video {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 0;
+    border-radius: var(--dk-radius);
+    background: #000;
+}
+
+.dk-bnr-spacer {
+    width: 100%;
+}
+
+/* Görsel üzerine bindirilen başlık/alt başlık/buton katmanı (ContentType.ImageWithOverlay). */
+.dk-bnr-overlay-wrap {
+    position: relative;
+}
+
+.dk-bnr-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+}
+
+.dk-bnr-overlay .dk-bnr-overlay-title {
+    font-family: var(--dk-font-heading);
+    color: #fff;
+    margin: 0;
+}
+
+.dk-bnr-overlay .dk-bnr-subtitle {
+    color: #f0f0f0;
+}
+
+.dk-bnr-product-widget {
+    width: 100%;
+}

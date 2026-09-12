@@ -1,0 +1,151 @@
+﻿@page "/admin/accounting/ledger-accounts/{Id:guid}"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@using Dekorras.Application.Accounting.Queries
+@using Dekorras.Domain.Accounting
+@inject MediatR.ISender Sender
+
+<PageTitle>Cari: @_account?.Name</PageTitle>
+
+@if (_account is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <a class="btn btn-secondary mb-3" href="/admin/accounting/ledger-accounts">← Cari Hesap Listesi</a>
+    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+        <h4 class="mb-sm-0">@_account.Name</h4>
+    </div>
+    <p>
+        @LedgerAccountList.TypeLabel(_account.Type)
+        @if (_account.TaxNumber is not null) { <text> · VN: @_account.TaxNumber</text> }
+        @if (_account.TaxOffice is not null) { <text> (@_account.TaxOffice)</text> }
+        @if (_account.Phone is not null) { <text> · @_account.Phone</text> }
+        <span class="badge @(_account.IsActive ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary") ms-1">@(_account.IsActive ? "Aktif" : "Pasif")</span>
+    </p>
+
+    @if (_account.IsActive)
+    {
+        <button class="btn btn-outline-warning btn-sm mb-2" @onclick="() => ToggleActiveAsync(false)">Pasife Al</button>
+    }
+    else
+    {
+        <button class="btn btn-outline-success btn-sm mb-2" @onclick="() => ToggleActiveAsync(true)">Aktifleştir</button>
+    }
+
+    <p class="fs-5">
+        Açık Bakiye: <strong class="@(_account.OpenBalanceTry > 0 ? "text-danger" : "text-success")">@_account.OpenBalanceTry.ToString("N2") ₺</strong>
+        @if (_account.CheckNoteBalanceTry != 0)
+        {
+            <text> · Çek/Senet Bakiyesi: @_account.CheckNoteBalanceTry.ToString("N2") ₺</text>
+        }
+    </p>
+
+    <hr class="mt-3" />
+    <h4>Yeni Hareket Ekle</h4>
+    <div class="row g-2" style="max-width: 700px;">
+        <div class="col">
+            <select class="form-select form-select-sm" @bind="_newDirection">
+                <option value="@LedgerTransactionDirection.Debit">Borç</option>
+                <option value="@LedgerTransactionDirection.Credit">Alacak</option>
+            </select>
+        </div>
+        <div class="col">
+            <input type="number" step="0.01" class="form-control form-control-sm" placeholder="Tutar (TRY)" @bind="_newAmountText" />
+        </div>
+        <div class="col-4">
+            <input class="form-control form-control-sm" placeholder="Açıklama" @bind="_newDescription" />
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-sm btn-success" @onclick="RecordTransactionAsync">Ekle</button>
+        </div>
+    </div>
+    @if (_transactionError is not null)
+    {
+        <p class="text-danger mt-1">@_transactionError</p>
+    }
+
+    <h4 class="mt-4">Hareketler (@_account.Transactions.Count)</h4>
+    @if (_account.Transactions.Count == 0)
+    {
+        <p class="text-muted">Henüz hareket yok.</p>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive table-card">
+                    <table class="table table-nowrap align-middle mb-0">
+                        <thead><tr><th>Tarih</th><th>Yön</th><th>Tutar</th><th>Açıklama</th></tr></thead>
+                        <tbody>
+                            @foreach (var transaction in _account.Transactions)
+                            {
+                                <tr>
+                                    <td>@transaction.TransactionDateUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td>
+                                        @if (transaction.Direction == LedgerTransactionDirection.Debit)
+                                        {
+                                            <span class="badge bg-danger-subtle text-danger">Borç</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success-subtle text-success">Alacak</span>
+                                        }
+                                    </td>
+                                    <td>@transaction.AmountTry.ToString("N2") ₺</td>
+                                    <td>@transaction.Description</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private LedgerAccountDetailDto? _account;
+
+    private LedgerTransactionDirection _newDirection = LedgerTransactionDirection.Debit;
+    private string _newAmountText = "";
+    private string _newDescription = "";
+    private string? _transactionError;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _account = await Sender.Send(new GetLedgerAccountDetailQuery(Id));
+
+    private async Task ToggleActiveAsync(bool isActive)
+    {
+        await Sender.Send(new SetLedgerAccountActiveCommand(Id, isActive));
+        await LoadAsync();
+    }
+
+    private async Task RecordTransactionAsync()
+    {
+        _transactionError = null;
+        if (!decimal.TryParse(_newAmountText, out var amount))
+        {
+            _transactionError = "Geçerli bir tutar girin.";
+            return;
+        }
+
+        try
+        {
+            await Sender.Send(new RecordLedgerTransactionCommand(Id, _newDirection, amount, _newDescription));
+            _newAmountText = "";
+            _newDescription = "";
+            await LoadAsync();
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _transactionError = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+}

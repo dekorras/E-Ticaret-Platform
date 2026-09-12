@@ -1,0 +1,77 @@
+@using Dekorras.Application.Content.Helpers
+@using Dekorras.Application.Content.Models
+@model IReadOnlyList<Dekorras.Application.Content.Queries.BannerContentDto>
+@{
+    // Bir kolonda ArDArDa (SortOrder sırasıyla) BİRDEN FAZLA "Image" tipli içerik varsa, _Node.cshtml
+    // bunları tek tek üst üste basmak yerine BURAYA - tek bir Bootstrap carousel'e - grup halinde
+    // yönlendirir (bkz. _Node.cshtml'deki gruplama mantığı). Tek bir görsel varsa bu partial hiç
+    // çağrılmaz, _Content.cshtml'in normal "Image" dalı (mevcut, değişmeyen davranış) kullanılır.
+    // Her slayt KENDİ ImageUrl/ImageUrlMobile/AltText/LinkUrl/LinkTarget alanlarını (admin'de o
+    // içerik için zaten girilmiş özellikleri) aynen taşır - _Content.cshtml'in "Image" dalıyla
+    // BİREBİR aynı görsel/link/picture mantığı, yalnızca carousel sarmalayıcısı eklenir.
+    // ImageUrl'i henüz girilmemiş (admin içeriği ekleyip görseli sonradan yükleyecek) slaytlar
+    // atlanır - _Content.cshtml'in "Image" dalındaki aynı korumayla tutarlı.
+    var slides = Model.Where(m => !string.IsNullOrWhiteSpace(m.ImageUrl)).ToList();
+    if (slides.Count == 0) { return; }
+    var carouselId = "bnr-slider-" + slides[0].Id;
+}
+<div id="@carouselId" class="carousel slide dk-bnr-slider" data-bs-ride="carousel">
+    <div class="carousel-indicators">
+        @for (var i = 0; i < slides.Count; i++)
+        {
+            <button type="button" data-bs-target="#@carouselId" data-bs-slide-to="@i" class="@(i == 0 ? "active" : "")" aria-current="@(i == 0 ? "true" : null)" aria-label="Slayt @(i + 1)"></button>
+        }
+    </div>
+    <div class="carousel-inner">
+        @for (var i = 0; i < slides.Count; i++)
+        {
+            var item = slides[i];
+            var linkRel = item.LinkTarget == "_blank" ? "noopener" : null;
+            <div class="carousel-item @(i == 0 ? "active" : "")">
+                @if (!string.IsNullOrWhiteSpace(item.LinkUrl))
+                {
+                    <a href="@item.LinkUrl" target="@item.LinkTarget" rel="@linkRel">
+                        @if (!string.IsNullOrWhiteSpace(item.ImageUrlMobile))
+                        {
+                            <picture>
+                                <source media="(max-width: 767px)" srcset="@item.ImageUrlMobile" />
+                                <img src="@item.ImageUrl" alt="@item.AltText" class="d-block w-100" loading="lazy" />
+                            </picture>
+                        }
+                        else
+                        {
+                            <img src="@item.ImageUrl" alt="@item.AltText" class="d-block w-100" loading="lazy" />
+                        }
+                    </a>
+                }
+                else
+                {
+                    if (!string.IsNullOrWhiteSpace(item.ImageUrlMobile))
+                    {
+                        <picture>
+                            <source media="(max-width: 767px)" srcset="@item.ImageUrlMobile" />
+                            <img src="@item.ImageUrl" alt="@item.AltText" class="d-block w-100" loading="lazy" />
+                        </picture>
+                    }
+                    else
+                    {
+                        <img src="@item.ImageUrl" alt="@item.AltText" class="d-block w-100" loading="lazy" />
+                    }
+                }
+                @if (!string.IsNullOrWhiteSpace(item.AltText))
+                {
+                    var overlaySettings = BannerSettingsJson.Deserialize<BannerContentSettings>(item.SettingsJson) ?? new BannerContentSettings();
+                    <div class="dk-bnr-image-text-overlay" style="@BannerCssBuilder.BuildImageOverlayStyle(overlaySettings)">
+                        <span>@item.AltText</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+    <button class="carousel-control-prev" type="button" data-bs-target="#@carouselId" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+    </button>
+    <button class="carousel-control-next" type="button" data-bs-target="#@carouselId" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+    </button>
+</div>

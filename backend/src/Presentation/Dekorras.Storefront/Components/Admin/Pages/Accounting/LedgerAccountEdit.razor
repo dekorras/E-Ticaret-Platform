@@ -1,0 +1,78 @@
+﻿@page "/admin/accounting/ledger-accounts/new"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@using Dekorras.Domain.Accounting
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Cari Hesap</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Cari Hesap</h4>
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 600px;">
+        <div class="mb-2">
+            <label class="form-label">Ad Soyad / Unvan</label>
+            <input class="form-control" @bind="_newName" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Tür</label>
+            <select class="form-select" @bind="_newType">
+                <option value="@LedgerAccountType.Customer">Müşteri</option>
+                <option value="@LedgerAccountType.Supplier">Tedarikçi</option>
+                <option value="@LedgerAccountType.Both">Her İkisi</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Vergi Dairesi</label>
+            <input class="form-control" @bind="_newTaxOffice" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Vergi No</label>
+            <input class="form-control" @bind="_newTaxNumber" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Telefon</label>
+            <input class="form-control" @bind="_newPhone" />
+        </div>
+
+        @if (_error is not null)
+        {
+            <p class="text-danger mt-2">@_error</p>
+        }
+
+        <button class="btn btn-success mt-2" @onclick="CreateAsync">Kaydet</button>
+        <a class="btn btn-secondary ms-2 mt-2" href="/admin/accounting/ledger-accounts">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private string _newName = "";
+    private LedgerAccountType _newType = LedgerAccountType.Customer;
+    private string _newTaxOffice = "";
+    private string _newTaxNumber = "";
+    private string _newPhone = "";
+    private string? _error;
+
+    private async Task CreateAsync()
+    {
+        _error = null;
+        try
+        {
+            await Sender.Send(new CreateLedgerAccountCommand(
+                _newName, _newType,
+                string.IsNullOrWhiteSpace(_newTaxOffice) ? null : _newTaxOffice,
+                string.IsNullOrWhiteSpace(_newTaxNumber) ? null : _newTaxNumber,
+                string.IsNullOrWhiteSpace(_newPhone) ? null : _newPhone));
+
+            NavigationManager.NavigateTo("/admin/accounting/ledger-accounts");
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _error = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+}

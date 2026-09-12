@@ -1,0 +1,137 @@
+/* Mega menü - masaüstünde CSS :hover/:focus-within ile açılır (JS gerekmez);
+   dokunmatik/klavye için header.js küçük bir .is-open toggle'ı ekler. */
+.dk-mega-nav .navbar-nav {
+    flex-wrap: wrap;
+}
+
+.dk-mega-item {
+    position: relative;
+}
+
+/* Genel kural - HEM açılır panelli (.dk-mega-item içindeki) HEM yaprak (Anasayfa/Blog/çocuğu
+   olmayan kategori) linkleri kapsar; .dk-mega-nav artık turuncu (bkz. layout.css) olduğu için
+   ikisi de beyaz olmalı - önceden yalnızca ".dk-mega-item > .dk-mega-link" stilliydi, yaprak
+   linkler Bootstrap'in varsayılan koyu rengini kullanıyordu. */
+.dk-mega-nav .dk-mega-link {
+    display: block;
+    padding: 0.75rem 1rem;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.dk-mega-nav .dk-mega-link:hover,
+.dk-mega-item.is-open > .dk-mega-link {
+    color: #fff;
+    background-color: rgba(0, 0, 0, 0.12);
+}
+
+/* Açılır panel taşıyan öğelerde (yaprak linklerde DEĞİL) küçük bir aşağı ok - mevcut markup
+   zaten bu ayrımı (.dk-mega-item class'ı yalnızca çocuğu olan öğelerde) sağladığı için Razor
+   değişikliği GEREKMEDİ, yalnızca CSS ile eklendi. */
+.dk-mega-item > .dk-mega-link::after {
+    content: "▾";
+    display: inline-block;
+    margin-left: 0.35rem;
+    font-size: 0.7rem;
+    vertical-align: middle;
+}
+
+.dk-mega-panel {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 640px;
+    max-width: 90vw;
+    background: var(--dk-color-bg);
+    border: 1px solid var(--dk-color-border);
+    box-shadow: var(--dk-shadow-md);
+    z-index: var(--dk-z-mega);
+    padding: 1.25rem;
+    border-radius: 0 0 var(--dk-radius) var(--dk-radius);
+}
+
+@media (hover: hover) {
+    .dk-mega-item:hover > .dk-mega-panel,
+    .dk-mega-item:focus-within > .dk-mega-panel {
+        display: block;
+    }
+}
+
+.dk-mega-item.is-open > .dk-mega-panel {
+    display: block;
+}
+
+.dk-mega-panel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem 1.5rem;
+}
+
+.dk-mega-panel-col a {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+    color: var(--dk-color-text);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.dk-mega-panel-col a:hover {
+    color: var(--dk-color-primary-dark);
+}
+
+.dk-mega-panel-col a.dk-mega-all {
+    font-weight: 700;
+}
+
+.dk-mega-panel-col img {
+    width: 28px;
+    height: 28px;
+    object-fit: cover;
+    border-radius: var(--dk-radius);
+    flex-shrink: 0;
+}
+
+/* Mobil: hover devre dışı, akordeon gibi davranır (sağdan kayan offcanvas çekmecesi içinde,
+   bkz. _Layout.cshtml #dkMobileMenu). */
+@media (max-width: 991.98px) {
+    .dk-mega-panel {
+        position: static;
+        box-shadow: none;
+        border: none;
+        min-width: 0;
+        max-width: none;
+        padding: 0.5rem 0 0.5rem 1rem;
+    }
+
+    .dk-mega-panel-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dk-mega-item > .dk-mega-link {
+        padding: 0.6rem 0.5rem;
+    }
+
+    /* Çekmece marka rengiyle (turuncu zemin/beyaz metin) uyumlu olsun diye #dkMobileMenu'nün KENDİ
+       arka planı marka rengine çevrildi - böylece yukarıdaki `.dk-mega-nav .dk-mega-link{color:#fff}`
+       kuralı DEĞİŞTİRİLMEDEN, olduğu gibi çalışmaya devam ediyor (masaüstündeki turuncu şeritle
+       AYNI görünüm, yalnızca artık dikey bir çekmecede). */
+    #dkMobileMenu.offcanvas {
+        --bs-offcanvas-bg: var(--dk-color-primary);
+        --bs-offcanvas-color: #fff;
+    }
+
+    .dk-mega-nav .dk-mega-item.is-open > .dk-mega-link,
+    .dk-mega-nav .dk-mega-link:hover {
+        background-color: rgba(0, 0, 0, 0.15);
+    }
+
+    .dk-mobile-menu-footer {
+        border-top: 1px solid rgba(255, 255, 255, 0.25);
+    }
+}

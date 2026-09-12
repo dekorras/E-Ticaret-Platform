@@ -1,0 +1,143 @@
+﻿@page "/admin/ecommerce/reviews"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Catalog.Commands
+@using Dekorras.Application.Catalog.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>Değerlendirmeler ve Sorular</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Değerlendirmeler ve Sorular</h4>
+</div>
+
+<h4 class="mt-4">Onay Bekleyen Değerlendirmeler (@(_pendingReviews?.Count ?? 0))</h4>
+@if (_pendingReviews is null)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_pendingReviews.Count == 0)
+{
+    <p class="text-muted">Onay bekleyen değerlendirme yok.</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table class="table table-nowrap align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Ürün</th>
+                            <th>Müşteri</th>
+                            <th>Puan</th>
+                            <th>Yorum</th>
+                            <th>Tarih</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var review in _pendingReviews)
+                        {
+                            <tr>
+                                <td>@review.ProductName</td>
+                                <td>@review.CustomerName</td>
+                                <td>@(new string('★', review.Rating))</td>
+                                <td>@review.Comment</td>
+                                <td>@review.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-success" @onclick="() => ApproveAsync(review.Id)">Onayla</button>
+                                    <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => RejectAsync(review.Id)">Reddet</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+<h4 class="mt-5">Yanıt Bekleyen Sorular (@(_pendingQuestions?.Count ?? 0))</h4>
+@if (_pendingQuestions is null)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_pendingQuestions.Count == 0)
+{
+    <p class="text-muted">Yanıt bekleyen soru yok.</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table class="table table-nowrap align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Ürün</th>
+                            <th>Müşteri</th>
+                            <th>Soru</th>
+                            <th>Tarih</th>
+                            <th style="min-width: 320px;">Yanıt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var question in _pendingQuestions)
+                        {
+                            <tr>
+                                <td>@question.ProductName</td>
+                                <td>@question.CustomerName</td>
+                                <td>@question.Question</td>
+                                <td>@question.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input class="form-control" @bind="_answerDrafts[question.Id]" placeholder="Yanıtınız" />
+                                        <button class="btn btn-success" @onclick="() => AnswerAsync(question.Id)">Yanıtla</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyCollection<PendingProductReviewDto>? _pendingReviews;
+    private IReadOnlyCollection<PendingProductQuestionDto>? _pendingQuestions;
+    private readonly Dictionary<Guid, string> _answerDrafts = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _pendingReviews = await Sender.Send(new GetPendingProductReviewsQuery());
+        _pendingQuestions = await Sender.Send(new GetUnansweredProductQuestionsQuery());
+        foreach (var question in _pendingQuestions)
+            _answerDrafts.TryAdd(question.Id, "");
+    }
+
+    private async Task ApproveAsync(Guid reviewId)
+    {
+        await Sender.Send(new ApproveProductReviewCommand(reviewId));
+        await LoadAsync();
+    }
+
+    private async Task RejectAsync(Guid reviewId)
+    {
+        await Sender.Send(new RejectProductReviewCommand(reviewId));
+        await LoadAsync();
+    }
+
+    private async Task AnswerAsync(Guid questionId)
+    {
+        if (!_answerDrafts.TryGetValue(questionId, out var answer) || string.IsNullOrWhiteSpace(answer))
+            return;
+
+        await Sender.Send(new AnswerProductQuestionCommand(questionId, answer));
+        await LoadAsync();
+    }
+}

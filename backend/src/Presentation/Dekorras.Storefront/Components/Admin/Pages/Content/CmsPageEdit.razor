@@ -1,0 +1,125 @@
+﻿@page "/admin/cms/pages/new"
+@page "/admin/cms/pages/{Id:guid}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.Common
+@using Dekorras.Application.Content.Commands
+@using Dekorras.Application.Content.Queries
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsNew ? "Yeni Sayfa" : "Sayfayı Düzenle")</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">@(IsNew ? "Yeni Sayfa" : "Sayfayı Düzenle")</h4>
+</div>
+
+<div class="mb-3" style="max-width: 300px;">
+    <label class="form-label">Düzenlenen Dil</label>
+    <select class="form-select" @bind="_editingLanguageCode" @bind:after="OnEditingLanguageChangedAsync">
+        @foreach (var language in SupportedLanguages.All)
+        {
+            <option value="@language.Code">@language.DisplayName</option>
+        }
+    </select>
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 700px;">
+        <div class="mb-2">
+            <label class="form-label">Başlık</label>
+            <input class="form-control" @bind="_title" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Slug (URL)</label>
+            <input class="form-control" @bind="_slug" placeholder="ör. gizlilik-politikasi" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">İçerik (HTML)</label>
+            <textarea class="form-control" rows="10" @bind="_contentHtml"></textarea>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Meta Başlık (SEO)</label>
+            <input class="form-control" @bind="_metaTitle" placeholder="Boş bırakılırsa sayfa başlığı kullanılır" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Meta Açıklama (SEO)</label>
+            <textarea class="form-control" rows="2" @bind="_metaDescription"></textarea>
+        </div>
+
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+
+        <button class="btn btn-success" @onclick="SaveAsync">Kaydet</button>
+        <a class="btn btn-secondary ms-2" href="/admin/cms/pages">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private string _editingLanguageCode = "tr";
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+
+    private string _title = "";
+    private string _slug = "";
+    private string _contentHtml = "";
+    private string? _metaTitle;
+    private string? _metaDescription;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id is Guid id)
+        {
+            var detail = await Sender.Send(new GetCmsPageByIdQuery(id, _editingLanguageCode));
+            if (detail is null) return;
+
+            _title = detail.Title;
+            _slug = detail.Slug;
+            _contentHtml = detail.ContentHtml;
+            _metaTitle = detail.MetaTitle;
+            _metaDescription = detail.MetaDescription;
+        }
+    }
+
+    private async Task OnEditingLanguageChangedAsync()
+    {
+        if (Id is not Guid id) return;
+
+        var detail = await Sender.Send(new GetCmsPageByIdQuery(id, _editingLanguageCode));
+        if (detail is null) return;
+
+        _title = detail.Title;
+        _contentHtml = detail.ContentHtml;
+        _metaTitle = detail.MetaTitle;
+        _metaDescription = detail.MetaDescription;
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (IsNew)
+            {
+                await Sender.Send(new CreateCmsPageCommand(_slug, _editingLanguageCode, _title, _contentHtml, _metaTitle, _metaDescription));
+            }
+            else
+            {
+                await Sender.Send(new UpdateCmsPageCommand(Id!.Value, _slug, _editingLanguageCode, _title, _contentHtml, _metaTitle, _metaDescription));
+            }
+
+            NavigationManager.NavigateTo("/admin/cms/pages");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FluentValidation.ValidationException)
+        {
+            _errorMessage = ex is FluentValidation.ValidationException vex
+                ? string.Join(" ", vex.Errors.Select(e => e.ErrorMessage))
+                : ex.Message;
+        }
+    }
+}

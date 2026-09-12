@@ -1,0 +1,69 @@
+﻿@page "/admin/accounting/quotes/new"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@using Dekorras.Application.Accounting.Queries
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Teklif</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Teklif</h4>
+</div>
+
+@if (_ledgerAccounts is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <div class="row g-2" style="max-width: 700px;">
+        <div class="col">
+            <select class="form-select form-select-sm" @bind="_newLedgerAccountId">
+                <option value="">Cari Hesap Seçin</option>
+                @foreach (var account in _ledgerAccounts)
+                {
+                    <option value="@account.Id">@account.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col">
+            <input type="date" class="form-control form-control-sm" @bind="_newValidUntil" />
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-sm btn-success" @onclick="CreateAsync">Oluştur</button>
+            <a class="btn btn-sm btn-secondary ms-1" href="/admin/accounting/quotes">Vazgeç</a>
+        </div>
+    </div>
+    @if (_error is not null)
+    {
+        <p class="text-danger mt-2">@_error</p>
+    }
+}
+
+@code {
+    private IReadOnlyCollection<LedgerAccountListItemDto>? _ledgerAccounts;
+
+    private string _newLedgerAccountId = "";
+    private DateTime _newValidUntil = DateTime.Today.AddDays(14);
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _ledgerAccounts = await Sender.Send(new GetLedgerAccountsQuery());
+    }
+
+    private async Task CreateAsync()
+    {
+        _error = null;
+        if (!Guid.TryParse(_newLedgerAccountId, out var accountId))
+        {
+            _error = "Cari hesap seçin.";
+            return;
+        }
+
+        await Sender.Send(new CreateQuoteCommand(accountId, _newValidUntil.ToUniversalTime()));
+        NavigationManager.NavigateTo("/admin/accounting/quotes");
+    }
+}

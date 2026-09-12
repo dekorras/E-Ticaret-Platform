@@ -1,0 +1,75 @@
+﻿@page "/admin/accounting/ledger-accounts"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@using Dekorras.Application.Accounting.Queries
+@using Dekorras.Domain.Accounting
+@inject MediatR.ISender Sender
+
+<PageTitle>Cari Hesaplar</PageTitle>
+
+<a class="btn btn-secondary mb-3" href="/admin/accounting">← Muhasebe Modülü</a>
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Cari Hesaplar</h4>
+    <a class="btn btn-primary" href="/admin/accounting/ledger-accounts/new">+ Yeni Cari Hesap</a>
+</div>
+
+<div class="mb-3" style="max-width: 400px;">
+    <input class="form-control" placeholder="Ad veya vergi no ile ara..." @bind="_searchText" @bind:event="oninput" @bind:after="LoadAsync" />
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive table-card">
+            <table id="ledgerAccountsTable" class="table table-nowrap align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Ad</th>
+                        <th>Tür</th>
+                        <th>Vergi No</th>
+                        <th>Açık Bakiye</th>
+                        <th>Hareket Sayısı</th>
+                        <th>Durum</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_accounts is not null)
+                    {
+                        @foreach (var account in _accounts)
+                        {
+                            <tr>
+                                <td><a href="/admin/accounting/ledger-accounts/@account.Id">@account.Name</a></td>
+                                <td>@TypeLabel(account.Type)</td>
+                                <td>@account.TaxNumber</td>
+                                <td class="@(account.OpenBalanceTry > 0 ? "text-danger" : "")" data-order="@account.OpenBalanceTry.ToString(System.Globalization.CultureInfo.InvariantCulture)">@account.OpenBalanceTry.ToString("N2") ₺</td>
+                                <td>@account.TransactionCount</td>
+                                <td><span class="badge @(account.IsActive ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")">@(account.IsActive ? "Aktif" : "Pasif")</span></td>
+                                <td><a class="btn btn-sm btn-outline-primary" href="/admin/accounting/ledger-accounts/@account.Id">Detay</a></td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+            <DataTableScript TableId="ledgerAccountsTable" ReloadToken="_accounts" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _searchText = "";
+    private IReadOnlyCollection<LedgerAccountListItemDto>? _accounts;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() =>
+        _accounts = await Sender.Send(new GetLedgerAccountsQuery(string.IsNullOrWhiteSpace(_searchText) ? null : _searchText));
+
+    public static string TypeLabel(LedgerAccountType type) => type switch
+    {
+        LedgerAccountType.Customer => "Müşteri",
+        LedgerAccountType.Supplier => "Tedarikçi",
+        LedgerAccountType.Both => "Her İkisi",
+        _ => type.ToString()
+    };
+}

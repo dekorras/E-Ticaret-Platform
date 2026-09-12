@@ -1,0 +1,853 @@
+@page "/admin/cms/banner-zones/{Id:guid}/builder"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.Catalog.Queries
+@using Dekorras.Application.Content.Commands
+@using Dekorras.Application.Content.Models
+@using Dekorras.Application.Content.Queries
+@using Dekorras.Domain.Content
+@inject MediatR.ISender Sender
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<PageTitle>@(_zone?.Name) - Ağaç Düzenleyici</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">@(_zone?.Name) - Ağaç Düzenleyici</h4>
+    <div>
+        @if (_zone?.Key == "home-main")
+        {
+            <a class="btn btn-outline-secondary" href="/" target="_blank">Önizle</a>
+        }
+        <a class="btn btn-secondary ms-1" href="/admin/cms/banner-zones">Listeye Dön</a>
+    </div>
+</div>
+
+@if (_zone is null || _tree is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    @if (_treeActionError is not null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @_treeActionError
+            <button type="button" class="btn-close" @onclick="() => _treeActionError = null"></button>
+        </div>
+    }
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">Yapı</h5>
+                <button class="btn btn-sm btn-primary" @onclick="AddRootRowAsync">+ Satır Ekle</button>
+            </div>
+            <div class="banner-builder-roots border rounded p-2" id="bannerBuilderRoot" data-parent-id="">
+                @foreach (var root in _tree.Roots)
+                {
+                    <div data-node-id="@root.Id">
+                        <BannerNodeEditor Node="root" SelectedNodeId="_selectedNodeId" SelectedContentId="_selectedContentId"
+                                          OnSelectNode="SelectNode" OnSelectContent="SelectContent"
+                                          OnAddRowToColumn="AddRowToColumnAsync" OnAddContentToColumn="AddContentMode"
+                                          OnSplitRow="SplitRowAsync" OnDeleteNode="DeleteNodeAsync" OnDeleteContent="DeleteContentAsync" />
+                    </div>
+                }
+                @if (_tree.Roots.Count == 0)
+                {
+                    <p class="text-muted mb-0">Henüz satır yok. "+ Satır Ekle" ile başlayın.</p>
+                }
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    @if (_selectedContentId is Guid selContentId && FindContent(selContentId) is BannerContentDto selContent)
+                    {
+                        var flags = GetFieldFlags(selContent.ContentType);
+                        <h5>İçeriği Düzenle</h5>
+                        <p class="text-muted small mb-2">@ContentTypeLabelTr(selContent.ContentType) türünde içerik.</p>
+
+                        @if (!string.IsNullOrEmpty(selContent.ImageUrl))
+                        {
+                            <img src="@selContent.ImageUrl" alt="" class="img-fluid rounded mb-2" style="max-height:120px;" />
+                        }
+
+                        @if (flags.Title)
+                        {
+                            <div class="mb-2"><label class="form-label small">Başlık</label><input class="form-control form-control-sm" @bind="_editTitle" /></div>
+                        }
+                        @if (flags.Subtitle)
+                        {
+                            <div class="mb-2"><label class="form-label small">Alt Başlık</label><input class="form-control form-control-sm" @bind="_editSubtitle" /></div>
+                        }
+                        @if (flags.Body)
+                        {
+                            <div class="mb-2"><label class="form-label small">İçerik</label><textarea class="form-control form-control-sm" rows="3" @bind="_editBody"></textarea></div>
+                        }
+                        @if (flags.AltText)
+                        {
+                            <div class="mb-2"><label class="form-label small">Alternatif Metin</label><input class="form-control form-control-sm" @bind="_editAltText" /></div>
+                        }
+                        @if (selContent.ContentType == BannerContentType.Image)
+                        {
+                            @* Alternatif Metin doluysa görselin üzerine bindirilir - bkz.
+                               Views/Shared/Components/BannerZone/_Content.cshtml. Renk/hizalama
+                               burada, içerik düzenleme panelinin içinde ayarlanır (düğüm/kolon
+                               seviyesindeki ayrı "Stil" sekmesinden BAĞIMSIZ, içerik-seviyesinde). *@
+                            <div class="mb-2 p-2 border rounded bg-body-tertiary">
+                                <label class="form-label small fw-semibold d-block mb-1">Metin Bindirme Stili</label>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small">Renk</label>
+                                        <input type="color" class="form-control form-control-color" value="@(_editContentSettings.AltTextColor ?? "#ffffff")" @onchange="e => _editContentSettings.AltTextColor = e.Value?.ToString()" />
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">Hizalama</label>
+                                        <select class="form-select form-select-sm" @bind="_editContentSettings.AltTextAlign">
+                                            <option value="">(varsayılan)</option>
+                                            <option value="left">Sol</option>
+                                            <option value="center">Orta</option>
+                                            <option value="right">Sağ</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        @if (flags.Image)
+                        {
+                            <div class="mb-2">
+                                <label class="form-label small">Yeni Görsel (opsiyonel)</label>
+                                <InputFile OnChange="OnEditFileSelected" accept="image/*" class="form-control form-control-sm" />
+                            </div>
+                        }
+                        @if (flags.Link)
+                        {
+                            <div class="mb-2"><label class="form-label small">Bağlantı URL'si</label><input class="form-control form-control-sm" @bind="_editLinkUrl" /></div>
+                            <div class="mb-2">
+                                <label class="form-label small">Bağlantı Hedefi</label>
+                                <select class="form-select form-select-sm" @bind="_editLinkTarget">
+                                    <option value="">(aynı sekme)</option>
+                                    <option value="_blank">Yeni sekme</option>
+                                </select>
+                            </div>
+                        }
+                        @if (flags.ButtonText)
+                        {
+                            <div class="mb-2"><label class="form-label small">Buton Metni</label><input class="form-control form-control-sm" @bind="_editButtonText" /></div>
+                        }
+                        @if (flags.ProductWidget)
+                        {
+                            <div class="mb-2">
+                                <label class="form-label small">Kategori</label>
+                                <select class="form-select form-select-sm" value="@(_editContentSettings.CategoryId?.ToString() ?? "")"
+                                        @onchange="e => _editContentSettings.CategoryId = string.IsNullOrEmpty(e.Value?.ToString()) ? null : Guid.Parse(e.Value!.ToString()!)">
+                                    <option value="">(seçiniz)</option>
+                                    @foreach (var cat in _categories)
+                                    {
+                                        <option value="@cat.Id">@cat.Label</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="mb-2"><label class="form-label small">Ürün Sayısı</label><input type="number" class="form-control form-control-sm" @bind="_editContentSettings.ProductCount" /></div>
+                        }
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small">Başlangıç Tarihi</label>
+                                <input type="datetime-local" class="form-control form-control-sm" value="@(_editStartDate?.ToString("yyyy-MM-ddTHH:mm"))" @onchange="e => _editStartDate = ParseDateTimeLocal(e.Value?.ToString())" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Bitiş Tarihi</label>
+                                <input type="datetime-local" class="form-control form-control-sm" value="@(_editEndDate?.ToString("yyyy-MM-ddTHH:mm"))" @onchange="e => _editEndDate = ParseDateTimeLocal(e.Value?.ToString())" />
+                            </div>
+                        </div>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" role="switch" id="contentActiveSwitch" @bind="_editIsActive" />
+                            <label class="form-check-label" for="contentActiveSwitch">Aktif</label>
+                        </div>
+
+                        @if (_editContentError is not null)
+                        {
+                            <p class="text-danger small">@_editContentError</p>
+                        }
+
+                        <button class="btn btn-sm btn-success" disabled="@_savingContent" @onclick="SaveContentAsync">Kaydet</button>
+                        <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => DeleteContentAsync(selContentId)">Sil</button>
+                    }
+                    else if (_selectedNodeId is Guid selNodeId && FindNode(selNodeId) is BannerNodeTreeDto selNode)
+                    {
+                        <h5>@(selNode.NodeType == BannerNodeType.Row ? "Satır Ayarları" : "Kolon Ayarları")</h5>
+
+                        <ul class="nav nav-pills mb-3" role="tablist">
+                            <li class="nav-item"><button class="nav-link @(_activeTab == "duzen" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-duzen" type="button" @onclick='() => _activeTab = "duzen"'>Düzen</button></li>
+                            <li class="nav-item"><button class="nav-link @(_activeTab == "stil" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-stil" type="button" @onclick='() => _activeTab = "stil"'>Stil</button></li>
+                            @if (selNode.NodeType == BannerNodeType.Column)
+                            {
+                                <li class="nav-item"><button class="nav-link @(_activeTab == "icerik" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-icerik" type="button" @onclick='() => _activeTab = "icerik"'>İçerik</button></li>
+                            }
+                            <li class="nav-item"><button class="nav-link @(_activeTab == "gelismis" ? "active" : "")" data-bs-toggle="pill" data-bs-target="#tab-gelismis" type="button" @onclick='() => _activeTab = "gelismis"'>Gelişmiş</button></li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <div class="tab-pane fade @(_activeTab == "duzen" ? "show active" : "")" id="tab-duzen">
+                                @if (selNode.NodeType == BannerNodeType.Column)
+                                {
+                                    <div class="alert alert-info py-2 px-3 small mb-2">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Her ekran boyutu için bu kolonun 12 birimlik Bootstrap grid'inde KAÇ birim
+                                        genişliğinde olacağını seçin (12 = tam genişlik, 6 = yarısı, 4 = üçte biri...).
+                                        "Ayarlanmadı" bırakılırsa, bir ÖNCEKİ (daha küçük) ekran boyutu için seçtiğiniz
+                                        değer o boyutta da geçerli olmaya devam eder (Bootstrap'ın "mobil öncelikli
+                                        miras alma" kuralı) - yalnızca genişliğin DEĞİŞMESİNİ istediğiniz noktalarda
+                                        seçim yapmanız yeterli, hepsini tek tek doldurmanız GEREKMEZ.
+                                    </div>
+                                    <div class="row g-2">
+                                        <div class="col-4">
+                                            <label class="form-label small mb-0" title="Telefon ve altı ekranlar (varsayılan/temel boyut)">XS <span class="text-muted">(&lt;576px)</span></label>
+                                            <select class="form-select form-select-sm" @bind="_nodeSettings.ColXs">
+                                                <option value="">Otomatik (12)</option>
+                                                @foreach (var i in ColumnWidthOptions)
+                                                {
+                                                    <option value="@i">@i</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label small mb-0" title="Küçük tabletler ve üzeri">SM <span class="text-muted">(&ge;576px)</span></label>
+                                            <select class="form-select form-select-sm" @bind="_nodeSettings.ColSm">
+                                                <option value="">Ayarlanmadı (miras al)</option>
+                                                @foreach (var i in ColumnWidthOptions)
+                                                {
+                                                    <option value="@i">@i</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label small mb-0" title="Tabletler ve üzeri">MD <span class="text-muted">(&ge;768px)</span></label>
+                                            <select class="form-select form-select-sm" @bind="_nodeSettings.ColMd">
+                                                <option value="">Ayarlanmadı (miras al)</option>
+                                                @foreach (var i in ColumnWidthOptions)
+                                                {
+                                                    <option value="@i">@i</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label small mb-0" title="Küçük dizüstü/masaüstü ve üzeri">LG <span class="text-muted">(&ge;992px)</span></label>
+                                            <select class="form-select form-select-sm" @bind="_nodeSettings.ColLg">
+                                                <option value="">Ayarlanmadı (miras al)</option>
+                                                @foreach (var i in ColumnWidthOptions)
+                                                {
+                                                    <option value="@i">@i</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label small mb-0" title="Geniş masaüstü ekranlar ve üzeri">XL <span class="text-muted">(&ge;1200px)</span></label>
+                                            <select class="form-select form-select-sm" @bind="_nodeSettings.ColXl">
+                                                <option value="">Ayarlanmadı (miras al)</option>
+                                                @foreach (var i in ColumnWidthOptions)
+                                                {
+                                                    <option value="@i">@i</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-4">
+                                            <label class="form-label small mb-0" title="En geniş ekranlar (ör. büyük monitörler)">XXL <span class="text-muted">(&ge;1400px)</span></label>
+                                            <select class="form-select form-select-sm" @bind="_nodeSettings.ColXxl">
+                                                <option value="">Ayarlanmadı (miras al)</option>
+                                                @foreach (var i in ColumnWidthOptions)
+                                                {
+                                                    <option value="@i">@i</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-6"><label class="form-label small">Offset</label><input type="number" class="form-control form-control-sm" @bind="_nodeSettings.Offset" /></div>
+                                        <div class="col-6"><label class="form-label small">Sıra (Order)</label><input type="number" class="form-control form-control-sm" @bind="_nodeSettings.Order" /></div>
+                                        <div class="col-12 form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" id="nodeHiddenCheck" @bind="_nodeSettings.Hidden" />
+                                            <label class="form-check-label" for="nodeHiddenCheck">Gizli (bu kolonu gösterme)</label>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-sm btn-success mt-2" @onclick="SaveNodeSettingsAsync">Kaydet</button>
+                                }
+                                else
+                                {
+                                    <p class="text-muted small mb-0">Düzen ayarları yalnızca kolonlar için geçerlidir.</p>
+                                }
+                            </div>
+
+                            <div class="tab-pane fade @(_activeTab == "stil" ? "show active" : "")" id="tab-stil">
+                                <div class="mb-2">
+                                    <label class="form-label small d-block">Arkaplan Rengi</label>
+                                    <input type="color" class="form-control form-control-color" value="@(_nodeSettings.BackgroundColor ?? "#ffffff")" @onchange="e => _nodeSettings.BackgroundColor = e.Value?.ToString()" />
+                                </div>
+                                <div class="mb-2"><label class="form-label small">Arkaplan Görseli URL</label><input class="form-control form-control-sm" @bind="_nodeSettings.BackgroundImageUrl" /></div>
+                                <div class="mb-2">
+                                    <label class="form-label small d-block">Metin Rengi</label>
+                                    <input type="color" class="form-control form-control-color" value="@(_nodeSettings.TextColor ?? "#000000")" @onchange="e => _nodeSettings.TextColor = e.Value?.ToString()" />
+                                </div>
+                                <div class="mb-2"><label class="form-label small">Üst/Alt Boşluk (Padding Y)</label><input class="form-control form-control-sm" @bind="_nodeSettings.PaddingY" placeholder="ör. 40px" /></div>
+                                <div class="mb-2"><label class="form-label small">Sağ/Sol Boşluk (Padding X)</label><input class="form-control form-control-sm" @bind="_nodeSettings.PaddingX" placeholder="ör. 20px" /></div>
+                                <div class="mb-2"><label class="form-label small">Minimum Yükseklik</label><input class="form-control form-control-sm" @bind="_nodeSettings.MinHeight" placeholder="ör. 300px" /></div>
+                                <div class="mb-2"><label class="form-label small">Kenar Yuvarlaklığı</label><input class="form-control form-control-sm" @bind="_nodeSettings.BorderRadius" placeholder="ör. 8px" /></div>
+                                <div class="mb-2">
+                                    <label class="form-label small">Metin Hizası</label>
+                                    <select class="form-select form-select-sm" @bind="_nodeSettings.TextAlign">
+                                        <option value="">(varsayılan)</option>
+                                        <option value="left">Sol</option>
+                                        <option value="center">Orta</option>
+                                        <option value="right">Sağ</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-sm btn-success" @onclick="SaveNodeSettingsAsync">Kaydet</button>
+                            </div>
+
+                            @if (selNode.NodeType == BannerNodeType.Column)
+                            {
+                                <div class="tab-pane fade @(_activeTab == "icerik" ? "show active" : "")" id="tab-icerik">
+                                    <h6>Yeni İçerik Ekle</h6>
+                                    <div class="mb-2">
+                                        <label class="form-label small">Tip</label>
+                                        <select class="form-select form-select-sm" @bind="_newContentType">
+                                            @foreach (var type in Enum.GetValues<BannerContentType>())
+                                            {
+                                                <option value="@type">@ContentTypeLabelTr(type)</option>
+                                            }
+                                        </select>
+                                    </div>
+
+                                    @{ var newFlags = GetFieldFlags(_newContentType); }
+
+                                    @if (newFlags.Title)
+                                    {
+                                        <div class="mb-2"><label class="form-label small">Başlık</label><input class="form-control form-control-sm" @bind="_newTitle" /></div>
+                                    }
+                                    @if (newFlags.Subtitle)
+                                    {
+                                        <div class="mb-2"><label class="form-label small">Alt Başlık</label><input class="form-control form-control-sm" @bind="_newSubtitle" /></div>
+                                    }
+                                    @if (newFlags.Body)
+                                    {
+                                        <div class="mb-2"><label class="form-label small">İçerik</label><textarea class="form-control form-control-sm" rows="3" @bind="_newBody"></textarea></div>
+                                    }
+                                    @if (newFlags.AltText)
+                                    {
+                                        <div class="mb-2"><label class="form-label small">Alternatif Metin</label><input class="form-control form-control-sm" @bind="_newAltText" /></div>
+                                    }
+                                    @if (_newContentType == BannerContentType.Image)
+                                    {
+                                        <div class="mb-2 p-2 border rounded bg-body-tertiary">
+                                            <label class="form-label small fw-semibold d-block mb-1">Metin Bindirme Stili</label>
+                                            <div class="row g-2">
+                                                <div class="col-6">
+                                                    <label class="form-label small">Renk</label>
+                                                    <input type="color" class="form-control form-control-color" value="@(_newContentSettings.AltTextColor ?? "#ffffff")" @onchange="e => _newContentSettings.AltTextColor = e.Value?.ToString()" />
+                                                </div>
+                                                <div class="col-6">
+                                                    <label class="form-label small">Hizalama</label>
+                                                    <select class="form-select form-select-sm" @bind="_newContentSettings.AltTextAlign">
+                                                        <option value="">(varsayılan)</option>
+                                                        <option value="left">Sol</option>
+                                                        <option value="center">Orta</option>
+                                                        <option value="right">Sağ</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                    @if (newFlags.Image)
+                                    {
+                                        <div class="mb-2">
+                                            <label class="form-label small">Görsel</label>
+                                            <InputFile OnChange="OnNewFileSelected" accept="image/*" class="form-control form-control-sm" />
+                                        </div>
+                                    }
+                                    @if (newFlags.Link)
+                                    {
+                                        <div class="mb-2"><label class="form-label small">Bağlantı URL'si</label><input class="form-control form-control-sm" @bind="_newLinkUrl" /></div>
+                                        <div class="mb-2">
+                                            <label class="form-label small">Bağlantı Hedefi</label>
+                                            <select class="form-select form-select-sm" @bind="_newLinkTarget">
+                                                <option value="">(aynı sekme)</option>
+                                                <option value="_blank">Yeni sekme</option>
+                                            </select>
+                                        </div>
+                                    }
+                                    @if (newFlags.ButtonText)
+                                    {
+                                        <div class="mb-2"><label class="form-label small">Buton Metni</label><input class="form-control form-control-sm" @bind="_newButtonText" /></div>
+                                    }
+                                    @if (newFlags.ProductWidget)
+                                    {
+                                        <div class="mb-2">
+                                            <label class="form-label small">Kategori</label>
+                                            <select class="form-select form-select-sm" value="@(_newContentSettings.CategoryId?.ToString() ?? "")"
+                                                    @onchange="e => _newContentSettings.CategoryId = string.IsNullOrEmpty(e.Value?.ToString()) ? null : Guid.Parse(e.Value!.ToString()!)">
+                                                <option value="">(seçiniz)</option>
+                                                @foreach (var cat in _categories)
+                                                {
+                                                    <option value="@cat.Id">@cat.Label</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="mb-2"><label class="form-label small">Ürün Sayısı</label><input type="number" class="form-control form-control-sm" @bind="_newContentSettings.ProductCount" /></div>
+                                    }
+
+                                    @if (_addContentError is not null)
+                                    {
+                                        <p class="text-danger small">@_addContentError</p>
+                                    }
+
+                                    <button class="btn btn-sm btn-success" disabled="@_addingContent" @onclick="AddContentAsync">Ekle</button>
+                                </div>
+                            }
+
+                            <div class="tab-pane fade @(_activeTab == "gelismis" ? "show active" : "")" id="tab-gelismis">
+                                <div class="mb-2"><label class="form-label small">Özel CSS Sınıfı</label><input class="form-control form-control-sm" @bind="_customCssClass" /></div>
+                                <div class="mb-2"><label class="form-label small">Özel HTML Id</label><input class="form-control form-control-sm" @bind="_customId" /></div>
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="nodeActiveSwitch" @bind="_nodeIsActive" />
+                                    <label class="form-check-label" for="nodeActiveSwitch">Aktif</label>
+                                </div>
+                                <button class="btn btn-sm btn-success" @onclick="SaveNodeAdvancedAsync">Kaydet</button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">Düzenlemek için soldaki ağaçtan bir satır, kolon ya da içerik seçin.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private BannerZoneDto? _zone;
+    private BannerZoneTreeDto? _tree;
+
+    private Guid? _selectedNodeId;
+    private Guid? _selectedContentId;
+    private string _activeTab = "duzen";
+    private string? _treeActionError;
+
+    // Seçili düğümün Düzen/Stil ayarları için çalışma kopyası.
+    private BannerNodeSettings _nodeSettings = new();
+
+    /// <summary>Bootstrap'ın 12 birimlik grid sistemindeki geçerli kolon genişlikleri (1-12) - Düzen
+    /// sekmesindeki XS/SM/MD/LG/XL/XXL alanları artık serbest sayı girişi yerine bu listeden seçim
+    /// yaptırıyor, kullanıcı isteği (bkz. backend/README.md).</summary>
+    private static readonly int[] ColumnWidthOptions = [.. Enumerable.Range(1, 12)];
+    private string? _customCssClass;
+    private string? _customId;
+    private bool _nodeIsActive = true;
+
+    // Yeni içerik ekleme formu.
+    private BannerContentType _newContentType = BannerContentType.Image;
+    private string? _newTitle, _newSubtitle, _newBody, _newAltText, _newLinkUrl, _newLinkTarget, _newButtonText;
+    private BannerContentSettings _newContentSettings = new();
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _newSelectedFile;
+    private bool _addingContent;
+    private string? _addContentError;
+
+    // Seçili içeriği düzenleme formu.
+    private string? _editTitle, _editSubtitle, _editBody, _editAltText, _editLinkUrl, _editLinkTarget, _editButtonText;
+    private BannerContentSettings _editContentSettings = new();
+    private bool _editIsActive = true;
+    private DateTime? _editStartDate, _editEndDate;
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _editSelectedFile;
+    private bool _savingContent;
+    private string? _editContentError;
+
+    private List<(Guid Id, string Label)> _categories = [];
+
+    private DotNetObjectReference<BannerZoneBuilder>? _dotNetRef;
+    private bool _needsSortableInit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _zone = await Sender.Send(new GetBannerZoneByIdQuery(Id));
+        if (_zone is null) return;
+
+        await LoadTreeAsync();
+        await LoadCategoriesAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_needsSortableInit || _tree is null) return;
+        _needsSortableInit = false;
+
+        _dotNetRef ??= DotNetObjectReference.Create(this);
+        foreach (var (containerId, groupName) in ComputeSortableContainers())
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("dekorrasBannerBuilder.initSortable", containerId, groupName, _dotNetRef);
+            }
+            catch (JSException ex)
+            {
+                // Sortable/dekorrasBannerBuilder script'i şu an AdminApp.razor'ın kalıcı kabuğunda
+                // yükleniyor (bkz. o dosyadaki yorum) - normal koşullarda bu asla tetiklenmemeli.
+                // Yine de burada YAKALANMASI, script beklenmedik bir sebeple eksik kalsa BİLE
+                // sürükle-bırak'ın sessizce devre dışı kalmasına yol açar, TÜM circuit'in (ve
+                // dolayısıyla sayfadaki HER butonun) çökmesine DEĞİL - bkz. backend/README.md'deki
+                // "BannerZoneBuilder butonları hiç çalışmıyordu" bulgusu.
+                Console.Error.WriteLine($"dekorrasBannerBuilder.initSortable başarısız oldu ({containerId}): {ex.Message}");
+            }
+        }
+    }
+
+    private async Task LoadTreeAsync()
+    {
+        if (_zone is null) return;
+        _tree = await Sender.Send(new GetBannerZoneTreeQuery(_zone.Key, IncludeInactive: true));
+        _needsSortableInit = true;
+    }
+
+    private async Task LoadCategoriesAsync()
+    {
+        var tree = await Sender.Send(new GetCategoryTreeQuery("tr"));
+        var flat = new List<(Guid Id, string Label)>();
+
+        void Flatten(IEnumerable<CategoryTreeItemDto> nodes, int depth)
+        {
+            foreach (var node in nodes)
+            {
+                flat.Add((node.Id, new string('-', depth * 2) + " " + node.Name));
+                Flatten(node.Children, depth + 1);
+            }
+        }
+
+        Flatten(tree, 0);
+        _categories = flat;
+    }
+
+    private List<(string ContainerId, string GroupName)> ComputeSortableContainers()
+    {
+        var list = new List<(string, string)> { ("bannerBuilderRoot", "banner-rows") };
+        if (_tree is null) return list;
+
+        void Walk(IEnumerable<BannerNodeTreeDto> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                var groupName = node.NodeType == BannerNodeType.Row ? "banner-cols" : "banner-rows";
+                list.Add(("bnr-list-" + node.Id, groupName));
+                Walk(node.Children);
+            }
+        }
+
+        Walk(_tree.Roots);
+        return list;
+    }
+
+    private BannerNodeTreeDto? FindNode(Guid id) => _tree is null ? null : FindNode(_tree.Roots, id);
+
+    private static BannerNodeTreeDto? FindNode(IEnumerable<BannerNodeTreeDto> nodes, Guid id)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.Id == id) return node;
+            var found = FindNode(node.Children, id);
+            if (found is not null) return found;
+        }
+        return null;
+    }
+
+    private BannerContentDto? FindContent(Guid id) => _tree is null ? null : FindContent(_tree.Roots, id);
+
+    private static BannerContentDto? FindContent(IEnumerable<BannerNodeTreeDto> nodes, Guid id)
+    {
+        foreach (var node in nodes)
+        {
+            var content = node.Contents.FirstOrDefault(c => c.Id == id);
+            if (content is not null) return content;
+            var found = FindContent(node.Children, id);
+            if (found is not null) return found;
+        }
+        return null;
+    }
+
+    private void SelectNode(Guid nodeId)
+    {
+        if (_selectedNodeId != nodeId) _activeTab = "duzen";
+        _selectedNodeId = nodeId;
+        _selectedContentId = null;
+        LoadNodeIntoForm(nodeId);
+    }
+
+    private void AddContentMode(Guid columnId)
+    {
+        _selectedNodeId = columnId;
+        _selectedContentId = null;
+        _activeTab = "icerik";
+        LoadNodeIntoForm(columnId);
+        ResetNewContentForm();
+    }
+
+    private void LoadNodeIntoForm(Guid nodeId)
+    {
+        var node = FindNode(nodeId);
+        if (node is null) return;
+
+        _nodeSettings = BannerSettingsJson.Deserialize<BannerNodeSettings>(node.SettingsJson)!;
+        _customCssClass = node.CustomCssClass;
+        _customId = node.CustomId;
+        _nodeIsActive = node.IsActive;
+    }
+
+    private void SelectContent(Guid contentId)
+    {
+        _selectedContentId = contentId;
+        _selectedNodeId = null;
+
+        var content = FindContent(contentId);
+        if (content is null) return;
+
+        _editTitle = content.Title;
+        _editSubtitle = content.Subtitle;
+        _editBody = content.Body;
+        _editAltText = content.AltText;
+        _editLinkUrl = content.LinkUrl;
+        _editLinkTarget = content.LinkTarget;
+        _editButtonText = content.ButtonText;
+        _editIsActive = content.IsActive;
+        _editStartDate = content.StartDateUtc;
+        _editEndDate = content.EndDateUtc;
+        _editContentSettings = BannerSettingsJson.Deserialize<BannerContentSettings>(content.SettingsJson)!;
+        _editSelectedFile = null;
+        _editContentError = null;
+    }
+
+    private void ResetNewContentForm()
+    {
+        _newContentType = BannerContentType.Image;
+        _newTitle = _newSubtitle = _newBody = _newAltText = _newLinkUrl = _newLinkTarget = _newButtonText = null;
+        _newContentSettings = new BannerContentSettings();
+        _newSelectedFile = null;
+        _addContentError = null;
+    }
+
+    /// <summary>
+    /// Ağaç yapısı aksiyonlarının (satır/kolon ekle-böl-taşı-sil, ayar kaydet) HEPSİ bu sarmalayıcı
+    /// üzerinden çalışır - bkz. backend/README.md'deki "BannerZoneBuilder butonları hiç
+    /// çalışmıyordu" bulgusu: bu handler'lardan biri denetlenmeyen bir istisna (ör. "bu düğüm kendi
+    /// alt ağacına taşınamaz", derinlik sınırı, kolon genişlikleri toplamı >12 gibi GERÇEKTEN
+    /// oluşabilecek domain kuralı ihlalleri) fırlatırsa, Blazor Server bunu olay işleyicisinde
+    /// YAKALANMAMIŞ bir istisna sayıp TÜM circuit'i (dolayısıyla sayfadaki HER butonu) düşürür.
+    /// Burada yakalayıp kullanıcıya Türkçe bir hata mesajı göstermek, tek bir geçersiz aksiyonun
+    /// sayfanın TAMAMINI kullanılamaz hale getirmesini önler.
+    /// </summary>
+    private async Task RunTreeActionAsync(Func<Task> action)
+    {
+        _treeActionError = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException or FluentValidation.ValidationException)
+        {
+            _treeActionError = ex is FluentValidation.ValidationException vex
+                ? string.Join(" ", vex.Errors.Select(e => e.ErrorMessage))
+                : ex.Message;
+        }
+
+        // Başarısız bir aksiyondan sonra bile ağacı yeniden yüklemek gerekir - ör. SortableJS bir
+        // sürükle-bırak'ı DOM'da İYİMSER OLARAK ZATEN uygulamıştır (bkz. OnNodeMoved); komut
+        // reddedilirse (geçersiz taşıma), sunucudaki GERÇEK durumu yeniden çekmek istemci
+        // görünümünü senkronize eder, aksi halde ekran sunucudan SAPMIŞ görünür.
+        await LoadTreeAsync();
+    }
+
+    private Task AddRootRowAsync() => RunTreeActionAsync(async () =>
+    {
+        if (_zone is null) return;
+        await Sender.Send(new AddBannerRowCommand(_zone.Id, null, null));
+    });
+
+    private Task AddRowToColumnAsync(Guid columnId) => RunTreeActionAsync(async () =>
+    {
+        if (_zone is null) return;
+        await Sender.Send(new AddBannerRowCommand(_zone.Id, columnId, null));
+    });
+
+    private Task SplitRowAsync((Guid RowId, int[] Widths) args) => RunTreeActionAsync(() =>
+        Sender.Send(new SplitRowIntoColumnsCommand(args.RowId, args.Widths)));
+
+    private Task DeleteNodeAsync(Guid nodeId) => RunTreeActionAsync(async () =>
+    {
+        await Sender.Send(new DeleteBannerNodeSubtreeCommand(nodeId));
+        if (_selectedNodeId == nodeId) _selectedNodeId = null;
+    });
+
+    private Task DeleteContentAsync(Guid contentId) => RunTreeActionAsync(async () =>
+    {
+        await Sender.Send(new RemoveBannerContentCommand(contentId));
+        if (_selectedContentId == contentId) _selectedContentId = null;
+    });
+
+    private Task SaveNodeSettingsAsync()
+    {
+        if (_selectedNodeId is not Guid nodeId) return Task.CompletedTask;
+
+        if (_nodeSettings.TextAlign == "") _nodeSettings.TextAlign = null;
+        var json = BannerSettingsJson.Serialize(_nodeSettings);
+        return RunTreeActionAsync(() => Sender.Send(new UpdateBannerNodeSettingsCommand(nodeId, json)));
+    }
+
+    private Task SaveNodeAdvancedAsync()
+    {
+        if (_selectedNodeId is not Guid nodeId) return Task.CompletedTask;
+
+        return RunTreeActionAsync(() => Sender.Send(new UpdateBannerNodeAdvancedCommand(nodeId, _customCssClass, _customId, _nodeIsActive)));
+    }
+
+    private void OnNewFileSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e) => _newSelectedFile = e.File;
+
+    private void OnEditFileSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e) => _editSelectedFile = e.File;
+
+    private async Task AddContentAsync()
+    {
+        if (_selectedNodeId is not Guid nodeId) return;
+
+        _addingContent = true;
+        _addContentError = null;
+        StateHasChanged();
+
+        Stream? imageStream = null;
+        try
+        {
+            string? fileName = null, contentType = null;
+            if (_newSelectedFile is not null)
+            {
+                const long maxFileSizeBytes = 10 * 1024 * 1024;
+                imageStream = _newSelectedFile.OpenReadStream(maxFileSizeBytes);
+                fileName = _newSelectedFile.Name;
+                contentType = _newSelectedFile.ContentType;
+            }
+
+            string? settingsJson = _newContentType is BannerContentType.ProductWidget or BannerContentType.Image
+                ? BannerSettingsJson.Serialize(_newContentSettings)
+                : null;
+
+            await Sender.Send(new AddBannerContentCommand(nodeId, _newContentType, _newTitle, _newSubtitle, _newBody, _newAltText,
+                _newLinkUrl, _newLinkTarget, _newButtonText, settingsJson, imageStream, fileName, contentType));
+
+            ResetNewContentForm();
+            await LoadTreeAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FluentValidation.ValidationException)
+        {
+            _addContentError = ex is FluentValidation.ValidationException vex
+                ? string.Join(" ", vex.Errors.Select(e => e.ErrorMessage))
+                : ex.Message;
+        }
+        finally
+        {
+            if (imageStream is not null) await imageStream.DisposeAsync();
+            _addingContent = false;
+        }
+    }
+
+    private async Task SaveContentAsync()
+    {
+        if (_selectedContentId is not Guid contentId) return;
+
+        _savingContent = true;
+        _editContentError = null;
+        StateHasChanged();
+
+        Stream? imageStream = null;
+        try
+        {
+            string? fileName = null, contentType = null;
+            if (_editSelectedFile is not null)
+            {
+                const long maxFileSizeBytes = 10 * 1024 * 1024;
+                imageStream = _editSelectedFile.OpenReadStream(maxFileSizeBytes);
+                fileName = _editSelectedFile.Name;
+                contentType = _editSelectedFile.ContentType;
+            }
+
+            var settingsJson = BannerSettingsJson.Serialize(_editContentSettings);
+
+            await Sender.Send(new UpdateBannerContentCommand(contentId, _editTitle, _editSubtitle, _editBody, _editAltText,
+                _editLinkUrl, _editLinkTarget, _editButtonText, settingsJson, _editStartDate, _editEndDate, _editIsActive,
+                imageStream, fileName, contentType));
+
+            await LoadTreeAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FluentValidation.ValidationException)
+        {
+            _editContentError = ex is FluentValidation.ValidationException vex
+                ? string.Join(" ", vex.Errors.Select(e => e.ErrorMessage))
+                : ex.Message;
+        }
+        finally
+        {
+            if (imageStream is not null) await imageStream.DisposeAsync();
+            _savingContent = false;
+        }
+    }
+
+    /// <summary>SortableJS'in sürükle-bırak sonunda çağırdığı JS interop hedefi - bkz.
+    /// wwwroot/js/admin/banner-zone-builder.js'deki onEnd geri çağrısı.</summary>
+    [JSInvokable]
+    public async Task OnNodeMoved(string nodeId, string? newParentId, int newIndex)
+    {
+        var targetId = Guid.Parse(nodeId);
+        Guid? newParent = string.IsNullOrEmpty(newParentId) ? null : Guid.Parse(newParentId);
+
+        await RunTreeActionAsync(() => Sender.Send(new MoveBannerNodeCommand(targetId, newParent, newIndex)));
+        StateHasChanged();
+    }
+
+    private static DateTime? ParseDateTimeLocal(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : DateTime.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string ContentTypeLabelTr(BannerContentType type) => type switch
+    {
+        BannerContentType.Image => "Görsel",
+        BannerContentType.ImageWithOverlay => "Görsel + Metin",
+        BannerContentType.Heading => "Başlık",
+        BannerContentType.Text => "Metin",
+        BannerContentType.Button => "Buton",
+        BannerContentType.LinkList => "Bağlantı Listesi",
+        BannerContentType.Video => "Video",
+        BannerContentType.RawHtml => "Ham HTML",
+        BannerContentType.Spacer => "Boşluk",
+        BannerContentType.ProductWidget => "Ürün Vitrini",
+        _ => type.ToString()
+    };
+
+    /// <summary>İçerik tipine göre hangi form alanlarının gösterileceğini belirler - hem "yeni içerik
+    /// ekle" formunda hem de seçili içeriği düzenleme panelinde kullanılır (ProductEdit'teki tipe göre
+    /// alan gösterme/gizleme deseniyle aynı fikir).</summary>
+    private sealed record ContentFieldFlags(bool Title, bool Subtitle, bool Body, bool AltText, bool Link, bool ButtonText, bool Image, bool ProductWidget);
+
+    private static ContentFieldFlags GetFieldFlags(BannerContentType type) => type switch
+    {
+        BannerContentType.Image => new ContentFieldFlags(false, false, false, true, true, false, true, false),
+        BannerContentType.ImageWithOverlay => new ContentFieldFlags(true, true, true, true, true, true, true, false),
+        BannerContentType.Heading => new ContentFieldFlags(true, false, false, false, false, false, false, false),
+        BannerContentType.Text => new ContentFieldFlags(true, false, true, false, false, false, false, false),
+        BannerContentType.Button => new ContentFieldFlags(true, false, false, false, true, true, false, false),
+        BannerContentType.LinkList => new ContentFieldFlags(true, false, true, false, false, false, false, false),
+        BannerContentType.Video => new ContentFieldFlags(true, false, false, false, true, false, false, false),
+        BannerContentType.RawHtml => new ContentFieldFlags(true, false, true, false, false, false, false, false),
+        BannerContentType.Spacer => new ContentFieldFlags(false, false, false, false, false, false, false, false),
+        BannerContentType.ProductWidget => new ContentFieldFlags(true, false, false, false, false, false, false, true),
+        _ => new ContentFieldFlags(true, true, true, true, true, true, true, true)
+    };
+
+    public void Dispose() => _dotNetRef?.Dispose();
+}

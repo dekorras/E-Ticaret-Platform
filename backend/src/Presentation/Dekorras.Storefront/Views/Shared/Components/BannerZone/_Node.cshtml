@@ -1,0 +1,68 @@
+@using Dekorras.Application.Content.Helpers
+@using Dekorras.Application.Content.Models
+@using Dekorras.Domain.Content
+@model Dekorras.Storefront.Views.Shared.Components.BannerZone.BannerNodeViewModel
+@{
+    // Domain'de Depth zaten en fazla 6 ile sınırlı, burada savunma amaçlı ikinci bir sınır daha var.
+    if (Model.RecursionDepth >= 6)
+    {
+        return;
+    }
+
+    var node = Model.Node;
+    var settings = BannerSettingsJson.Deserialize<BannerNodeSettings>(node.SettingsJson) ?? new BannerNodeSettings();
+}
+@if (node.NodeType == BannerNodeType.Row)
+{
+    <div class="row dk-bnr-row @node.CustomCssClass" id="@node.CustomId">
+        @foreach (var child in node.Children)
+        {
+            @await Html.PartialAsync("~/Views/Shared/Components/BannerZone/_Node.cshtml", new Dekorras.Storefront.Views.Shared.Components.BannerZone.BannerNodeViewModel(child, Model.RecursionDepth + 1))
+        }
+    </div>
+}
+else
+{
+    <div class="@("dk-bnr-col " + BannerCssBuilder.BuildColumnClasses(settings)) @node.CustomCssClass" id="@node.CustomId" style="@BannerCssBuilder.BuildInlineStyle(settings)">
+        @if (node.Children.Count > 0)
+        {
+            @* Sütun içinde iç içe satır(lar) var - Column, Row veya BannerContent içerir ama ikisini birden içermez. *@
+            foreach (var child in node.Children)
+            {
+                @await Html.PartialAsync("~/Views/Shared/Components/BannerZone/_Node.cshtml", new Dekorras.Storefront.Views.Shared.Components.BannerZone.BannerNodeViewModel(child, Model.RecursionDepth + 1))
+            }
+        }
+        else
+        {
+            @* Ard arda (SortOrder sırasıyla) birden fazla "Image" tipli içerik varsa TEK bir
+               carousel'e ("_ImageSlider") gruplanır - her slayt kendi ImageUrl/LinkUrl/AltText'ini
+               aynen korur. Tek bir Image varsa (veya başka bir içerik tipiyse) davranış DEĞİŞMEZ,
+               "_Content"in mevcut tekli-görsel dalı kullanılır. Bkz. o iki partial'daki yorumlar. *@
+            var contentGroups = new List<List<Dekorras.Application.Content.Queries.BannerContentDto>>();
+            foreach (var content in node.Contents)
+            {
+                var lastGroup = contentGroups.Count > 0 ? contentGroups[^1] : null;
+                if (content.ContentType == BannerContentType.Image && lastGroup is not null && lastGroup[0].ContentType == BannerContentType.Image)
+                {
+                    lastGroup.Add(content);
+                }
+                else
+                {
+                    contentGroups.Add([content]);
+                }
+            }
+
+            foreach (var group in contentGroups)
+            {
+                if (group.Count > 1)
+                {
+                    @await Html.PartialAsync("~/Views/Shared/Components/BannerZone/_ImageSlider.cshtml", group)
+                }
+                else
+                {
+                    @await Html.PartialAsync("~/Views/Shared/Components/BannerZone/_Content.cshtml", group[0])
+                }
+            }
+        }
+    </div>
+}

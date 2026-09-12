@@ -1,0 +1,115 @@
+@using Dekorras.Application.Ordering.Queries
+@using Dekorras.Domain.Ordering
+@model OrderDetailDto
+@{
+    ViewData["Title"] = $"Sipariş {Model.OrderNumber}";
+
+    static string StatusLabel(OrderStatus status) => status switch
+    {
+        OrderStatus.PendingApproval => "Onay Bekliyor",
+        OrderStatus.Preparing => "Hazırlanıyor",
+        OrderStatus.Prepared => "Hazırlandı",
+        OrderStatus.Shipped => "Kargoya Verildi",
+        OrderStatus.Completed => "Tamamlandı",
+        OrderStatus.Cancelled => "İptal Edildi",
+        OrderStatus.CancellationReverted => "İptal Geri Alındı",
+        OrderStatus.Refunded => "İade Edildi",
+        OrderStatus.Rejected => "Reddedildi",
+        OrderStatus.Expired => "Süresi Doldu",
+        OrderStatus.Chargeback => "Ters İbraz",
+        OrderStatus.Failed => "Başarısız",
+        OrderStatus.OnHold => "Durduruldu",
+        OrderStatus.Voided => "Hükümsüz",
+        _ => status.ToString()
+    };
+}
+
+<a class="btn btn-secondary mb-3 dk-back-link" asp-action="Orders"><i class="bi bi-arrow-left"></i> Siparişlerim</a>
+
+<h1 class="h3">Sipariş @Model.OrderNumber</h1>
+<p>
+    <span class="badge bg-secondary">@StatusLabel(Model.Status)</span>
+    <span class="text-muted ms-2">@Model.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+</p>
+
+@if (!string.IsNullOrWhiteSpace(Model.ShipmentTrackingNumber))
+{
+    <div class="alert alert-info">Kargo Takip No: <strong>@Model.ShipmentTrackingNumber</strong></div>
+}
+
+<div class="row">
+    <div class="col-md-7">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Ürünler</h5>
+                <table class="table table-sm">
+                    <thead><tr><th>Ürün</th><th>Adet</th><th>Birim Fiyat</th><th>Tutar</th></tr></thead>
+                    <tbody>
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td>@item.ProductName</td>
+                                <td>@item.Quantity</td>
+                                <td>@item.UnitPriceTry.ToString("N2") ₺</td>
+                                <td>@item.LineTotalTry.ToString("N2") ₺</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @* Sipariş detayı bilinçli olarak HER ZAMAN TL gösterir - bkz. Orders.cshtml'deki aynı not. *@
+                <table class="table table-sm w-auto ms-auto">
+                    <tbody>
+                        <tr><td>Ara Toplam</td><td class="text-end">@Model.SubTotalTry.ToString("N2") ₺</td></tr>
+                        @if (Model.DiscountTotalTry > 0)
+                        {
+                            <tr><td>İndirim</td><td class="text-end">-@Model.DiscountTotalTry.ToString("N2") ₺</td></tr>
+                        }
+                        <tr><td>KDV</td><td class="text-end">@Model.TaxTotalTry.ToString("N2") ₺</td></tr>
+                        <tr><td>Kargo</td><td class="text-end">@Model.ShippingTotalTry.ToString("N2") ₺</td></tr>
+                        <tr class="fw-bold"><td>Genel Toplam</td><td class="text-end">@Model.GrandTotalTry.ToString("N2") ₺</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Teslimat Adresi</h5>
+                <p class="mb-0">
+                    @Model.ShippingRecipientName<br />
+                    @Model.ShippingAddressLine1<br />
+                    @Model.ShippingCity, @Model.ShippingCountryCode<br />
+                    @Model.ShippingPhoneNumber
+                </p>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Sipariş Geçmişi</h5>
+                @if (Model.StatusHistory.Count == 0)
+                {
+                    <p class="text-muted mb-0">Henüz durum geçmişi yok.</p>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var entry in Model.StatusHistory)
+                        {
+                            <li class="list-group-item">
+                                <strong>@StatusLabel(entry.Status)</strong>
+                                <span class="text-muted ms-2">@entry.ChangedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                                @if (!string.IsNullOrWhiteSpace(entry.Note))
+                                {
+                                    <div class="text-muted small">@entry.Note</div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>

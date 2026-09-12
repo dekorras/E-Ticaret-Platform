@@ -1,0 +1,50 @@
+﻿@page "/admin/ecommerce/brands/new"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Catalog.Commands
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Marka</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Marka</h4>
+</div>
+
+<div class="card" style="max-width: 480px;">
+    <div class="card-body">
+        <div class="mb-2">
+            <label class="form-label">Ad</label>
+            <input class="form-control" @bind="_name" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Slug</label>
+            <input class="form-control" @bind="_slug" />
+        </div>
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+        <button class="btn btn-success" @onclick="CreateAsync">Ekle</button>
+        <a class="btn btn-secondary ms-2" href="/admin/ecommerce/brands">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private string _name = "";
+    private string _slug = "";
+    private string? _errorMessage;
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            await Sender.Send(new CreateBrandCommand(_name, _slug));
+            NavigationManager.NavigateTo("/admin/ecommerce/brands");
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _errorMessage = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+}

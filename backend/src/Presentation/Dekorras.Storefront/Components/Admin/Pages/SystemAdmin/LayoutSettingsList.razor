@@ -1,0 +1,103 @@
+@page "/admin/settings/layout"
+@attribute [Authorize(Policy = "SysAdminOnly")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Common
+@using Dekorras.Application.SystemAdmin.Commands
+@using Dekorras.Application.SystemAdmin.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>Site Genişliği Ayarları</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Site Genişliği Ayarları</h4>
+</div>
+<p class="text-muted">
+    Storefront üst bilgi çubuğu (İletişim/Dil/Para Birimi), logo/arama/hesap satırı ve mega menünün
+    "container" davranışını buradan yönetin. "Tam Genişlik" kenardan kenara uzanır (mevcut varsayılan),
+    "Ortalı" ise seçtiğiniz maksimum genişlikte ortalanmış olarak gösterilir.
+</p>
+
+@if (_loaded)
+{
+    <div class="card" style="max-width: 600px;">
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label d-block">Görünüm</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="containerMode" id="modeFluid"
+                           value="@LayoutSettingKeys.ModeFluid" checked="@(_mode == LayoutSettingKeys.ModeFluid)"
+                           @onchange="@(() => _mode = LayoutSettingKeys.ModeFluid)" />
+                    <label class="form-check-label" for="modeFluid">Tam Genişlik (kenardan kenara)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="containerMode" id="modeBoxed"
+                           value="@LayoutSettingKeys.ModeBoxed" checked="@(_mode == LayoutSettingKeys.ModeBoxed)"
+                           @onchange="@(() => _mode = LayoutSettingKeys.ModeBoxed)" />
+                    <label class="form-check-label" for="modeBoxed">Ortalı (belirlenen genişlikte ortalanmış)</label>
+                </div>
+            </div>
+
+            @if (_mode == LayoutSettingKeys.ModeBoxed)
+            {
+                <div class="mb-3">
+                    <label class="form-label">Maksimum Genişlik (Bootstrap Container Boyutu)</label>
+                    <select class="form-select" style="max-width: 420px;" @bind="_maxWidthPx">
+                        @foreach (var breakpoint in LayoutSettingKeys.BootstrapContainerBreakpoints)
+                        {
+                            <option value="@breakpoint.MaxWidthPx">@breakpoint.Label</option>
+                        }
+                    </select>
+                    <div class="form-text">
+                        Bootstrap'ın kendi `.container` sınıfının resmi breakpoint genişlikleri arasından seçilir.
+                        Ekran genişliği seçilen değerden küçükse tam genişlik kullanılır (responsive).
+                    </div>
+                </div>
+            }
+
+            @if (_savedMessage is not null)
+            {
+                <p class="text-success">@_savedMessage</p>
+            }
+
+            <button class="btn btn-success" @onclick="SaveAsync">Kaydet</button>
+        </div>
+    </div>
+}
+else
+{
+    <p>Yükleniyor...</p>
+}
+
+@code {
+    private bool _loaded;
+    private string _mode = LayoutSettingKeys.ModeFluid;
+    private int _maxWidthPx = LayoutSettingKeys.BootstrapContainerBreakpoints[^1].MaxWidthPx;
+    private string? _savedMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await Sender.Send(new GetSettingsQuery(LayoutSettingKeys.All));
+
+        _mode = settings.FirstOrDefault(s => s.Key == LayoutSettingKeys.HeaderContainerMode)?.Value ?? LayoutSettingKeys.ModeFluid;
+        var maxWidthValue = settings.FirstOrDefault(s => s.Key == LayoutSettingKeys.HeaderContainerMaxWidth)?.Value;
+        var parsedWidth = int.TryParse(maxWidthValue?.Replace("px", ""), out var parsed) ? parsed : (int?)null;
+        // Kayıtlı değer listedeki breakpoint'lerden BİRİYLE birebir eşleşmiyorsa (ör. bu özelliğin
+        // ilk sürümünde serbest metinle girilmiş eski bir değer) en yakın standart breakpoint'e
+        // yuvarlanır - liste artık TEK doğruluk kaynağı, rastgele bir px değeri seçili KALAMAZ.
+        _maxWidthPx = parsedWidth is not null && LayoutSettingKeys.BootstrapContainerBreakpoints.Any(b => b.MaxWidthPx == parsedWidth)
+            ? parsedWidth.Value
+            : LayoutSettingKeys.BootstrapContainerBreakpoints
+                .OrderBy(b => Math.Abs(b.MaxWidthPx - (parsedWidth ?? LayoutSettingKeys.BootstrapContainerBreakpoints[^1].MaxWidthPx)))
+                .First().MaxWidthPx;
+
+        _loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        await Sender.Send(new UpsertSettingCommand(LayoutSettingKeys.HeaderContainerMode, _mode));
+        await Sender.Send(new UpsertSettingCommand(LayoutSettingKeys.HeaderContainerMaxWidth, $"{_maxWidthPx}px"));
+
+        _savedMessage = "Kaydedildi.";
+    }
+}

@@ -1,0 +1,29 @@
+@using Dekorras.Storefront.Models
+@model LoginFormModel
+@{
+    ViewData["Title"] = "Giriş Yap";
+    var returnUrl = ViewBag.ReturnUrl as string;
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <h1 class="h3 mb-3">Giriş Yap</h1>
+
+        <form asp-controller="Account" asp-action="Login" asp-route-returnUrl="@returnUrl" method="post">
+            <div asp-validation-summary="All" class="text-danger"></div>
+
+            <div class="mb-2">
+                <label class="form-label">E-posta</label>
+                <input asp-for="Email" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Şifre</label>
+                <input asp-for="Password" class="form-control" />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Giriş Yap</button>
+        </form>
+
+        <p class="mt-3 text-muted">Hesabınız yok mu? <a asp-controller="Account" asp-action="Register">Üye olun</a>.</p>
+    </div>
+</div>

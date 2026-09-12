@@ -1,0 +1,44 @@
+@using Dekorras.Application.Catalog.Storefront
+@using Dekorras.Storefront.Models
+@model ProductListingViewModel
+@{
+    var category = (StorefrontCategoryDto)ViewBag.Category;
+    ViewData["Title"] = string.IsNullOrWhiteSpace(category.MetaTitle) ? category.Name : category.MetaTitle;
+    ViewData["MetaDescription"] = category.MetaDescription ?? category.Description;
+    // Kullanıcı isteği: bu sayfada ürünler varsayılan olarak 3'lü ızgara ile başlasın (araç
+    // çubuğundaki 2/3/4 düğmeleriyle değiştirilebilir, bkz. _ProductToolbar.cshtml/product-view.js).
+    ViewData["ProductGridDefaultCols"] = 3;
+}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">@Localizer["Anasayfa"]</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@category.Name</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-3">@category.Name</h1>
+@if (!string.IsNullOrWhiteSpace(category.Description))
+{
+    <p class="text-muted">@category.Description</p>
+}
+
+@* Ürün listeleme düzeni: üstte araç çubuğu (sayfalama + görünüm/sütun kontrolleri), altında
+   solda kriterler (kenar çubuğu) / sağda ürünler - kullanıcı isteği, bkz. backend/README.md. *@
+<div data-dk-product-listing>
+    @await Html.PartialAsync("_ProductToolbar", Model)
+    <div class="row g-4">
+        <div class="col-lg-3">
+            @await Html.PartialAsync("_ProductFilters", Model)
+        </div>
+        <div class="col-lg-9">
+            @{ ViewData["InfiniteScrollController"] = "Category"; }
+            @await Html.PartialAsync("_InfiniteScroll", Model)
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/infinite-scroll.js" asp-append-version="true"></script>
+    <script src="~/js/product-view.js" asp-append-version="true"></script>
+}

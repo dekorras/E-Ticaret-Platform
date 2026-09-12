@@ -1,0 +1,75 @@
+﻿@page "/admin/accounting/quotes"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@using Dekorras.Application.Accounting.Queries
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Teklifler</PageTitle>
+
+<a class="btn btn-secondary mb-3" href="/admin/accounting">← Muhasebe Modülü</a>
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Teklifler</h4>
+    <a class="btn btn-primary" href="/admin/accounting/quotes/new">+ Yeni Teklif</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive table-card">
+            <table id="quotesTable" class="table table-nowrap align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Teklif No</th>
+                        <th>Cari Hesap</th>
+                        <th>Tutar</th>
+                        <th>Geçerlilik</th>
+                        <th>Oluşturma</th>
+                        <th>Durum</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_quotes is not null)
+                    {
+                        @foreach (var quote in _quotes)
+                        {
+                            <tr>
+                                <td><a href="/admin/accounting/quotes/@quote.Id">@quote.QuoteNumber</a></td>
+                                <td>@quote.LedgerAccountName</td>
+                                <td data-order="@quote.TotalAmountTry.ToString(System.Globalization.CultureInfo.InvariantCulture)">@quote.TotalAmountTry.ToString("N2") ₺</td>
+                                <td data-order="@quote.ValidUntilUtc.ToString("o")">@quote.ValidUntilUtc.ToString("dd.MM.yyyy")</td>
+                                <td data-order="@quote.CreatedAtUtc.ToString("o")">@quote.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    @if (quote.IsConverted)
+                                    {
+                                        <span class="badge bg-success-subtle text-success">Siparişe Dönüştü</span>
+                                    }
+                                    else if (quote.ValidUntilUtc < DateTime.UtcNow)
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary">Süresi Doldu</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-info-subtle text-info">Geçerli</span>
+                                    }
+                                </td>
+                                <td><a class="btn btn-sm btn-outline-primary" href="/admin/accounting/quotes/@quote.Id">Detay</a></td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+            <DataTableScript TableId="quotesTable" ReloadToken="_quotes" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyCollection<QuoteListItemDto>? _quotes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _quotes = await Sender.Send(new GetQuotesQuery());
+    }
+}

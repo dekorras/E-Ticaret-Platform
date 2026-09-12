@@ -1,0 +1,53 @@
+﻿@page "/admin/accounting/bank-accounts/new"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Banka Hesabı</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Banka Hesabı</h4>
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 500px;">
+        <div class="mb-2">
+            <label class="form-label">Banka Adı</label>
+            <input class="form-control" @bind="_newBankName" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">IBAN</label>
+            <input class="form-control" @bind="_newIban" />
+        </div>
+
+        @if (_bankError is not null)
+        {
+            <p class="text-danger">@_bankError</p>
+        }
+
+        <button class="btn btn-success" @onclick="CreateBankAccountAsync">Kaydet</button>
+        <a class="btn btn-secondary ms-2" href="/admin/accounting/cash-and-bank">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private string _newBankName = "";
+    private string _newIban = "";
+    private string? _bankError;
+
+    private async Task CreateBankAccountAsync()
+    {
+        _bankError = null;
+        try
+        {
+            await Sender.Send(new CreateBankAccountCommand(_newBankName, _newIban));
+            NavigationManager.NavigateTo("/admin/accounting/cash-and-bank");
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _bankError = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+}

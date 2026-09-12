@@ -1,0 +1,48 @@
+﻿@page "/admin/accounting/cash-registers/new"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Kasa</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Kasa</h4>
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 500px;">
+        <div class="mb-2">
+            <label class="form-label">Kasa Adı</label>
+            <input class="form-control" @bind="_newCashRegisterName" />
+        </div>
+
+        @if (_cashError is not null)
+        {
+            <p class="text-danger">@_cashError</p>
+        }
+
+        <button class="btn btn-success" @onclick="CreateCashRegisterAsync">Kaydet</button>
+        <a class="btn btn-secondary ms-2" href="/admin/accounting/cash-and-bank">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private string _newCashRegisterName = "";
+    private string? _cashError;
+
+    private async Task CreateCashRegisterAsync()
+    {
+        _cashError = null;
+        try
+        {
+            await Sender.Send(new CreateCashRegisterCommand(_newCashRegisterName));
+            NavigationManager.NavigateTo("/admin/accounting/cash-and-bank");
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _cashError = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+}

@@ -1,0 +1,130 @@
+﻿@page "/admin/system/two-factor"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using System.Text
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<IdentityUser> UserManager
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>İki Faktörlü Kimlik Doğrulama</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">İki Faktörlü Kimlik Doğrulama</h4>
+</div>
+<p class="text-muted">
+    Bkz. plan §11 - "admin panelde ... 2FA (önerilen bir iyileştirme)". Etkinleştirildiğinde,
+    girişte şifreye ek olarak bir kimlik doğrulama uygulamasından (Google Authenticator, Microsoft
+    Authenticator, Authy vb.) alınan 6 haneli kod istenir.
+</p>
+
+@if (_user is null)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_isEnabled)
+{
+    <p class="text-success">İki faktörlü kimlik doğrulama şu anda <strong>etkin</strong>.</p>
+    <button class="btn btn-outline-danger" @onclick="DisableAsync">Devre Dışı Bırak</button>
+}
+else
+{
+    <p class="text-secondary">İki faktörlü kimlik doğrulama şu anda <strong>devre dışı</strong>.</p>
+
+    <div class="card mt-3" style="max-width: 500px;">
+        <div class="card-body">
+            <h5 class="card-title">1. Adım - Uygulamaya Ekle</h5>
+            <p class="small text-muted">
+                Kimlik doğrulama uygulamanızda "Hesap Ekle" seçip aşağıdaki anahtarı ELLE girin
+                (uygulama QR kodu okutmayı istiyorsa aşağıdaki URI'yi bir QR koda çevirebilirsiniz).
+            </p>
+            <p><code>@_sharedKey</code></p>
+            <p class="small text-muted text-break">@_authenticatorUri</p>
+
+            <h5 class="card-title mt-3">2. Adım - Doğrula</h5>
+            <div class="mb-2">
+                <label class="form-label">Uygulamadaki 6 haneli kod</label>
+                <input type="text" class="form-control" style="max-width: 200px;" inputmode="numeric" @bind="_verificationCode" />
+            </div>
+            @if (_error is not null)
+            {
+                <p class="text-danger">@_error</p>
+            }
+            <button class="btn btn-success" @onclick="VerifyAndEnableAsync">Doğrula ve Etkinleştir</button>
+        </div>
+    </div>
+}
+
+@code {
+    private IdentityUser? _user;
+    private bool _isEnabled;
+    private string? _sharedKey;
+    private string? _authenticatorUri;
+    private string _verificationCode = "";
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        _user = await UserManager.GetUserAsync(authState.User);
+        if (_user is null) return;
+
+        _isEnabled = await UserManager.GetTwoFactorEnabledAsync(_user);
+        if (!_isEnabled)
+            await LoadSharedKeyAsync(_user);
+    }
+
+    private async Task LoadSharedKeyAsync(IdentityUser user)
+    {
+        var unformattedKey = await UserManager.GetAuthenticatorKeyAsync(user);
+        if (string.IsNullOrEmpty(unformattedKey))
+        {
+            await UserManager.ResetAuthenticatorKeyAsync(user);
+            unformattedKey = await UserManager.GetAuthenticatorKeyAsync(user);
+        }
+
+        _sharedKey = FormatKey(unformattedKey!);
+        _authenticatorUri = $"otpauth://totp/{Uri.EscapeDataString("Dekorras Admin")}:{Uri.EscapeDataString(user.Email!)}" +
+            $"?secret={unformattedKey}&issuer={Uri.EscapeDataString("Dekorras Admin")}&digits=6";
+    }
+
+    private static string FormatKey(string unformattedKey)
+    {
+        var result = new StringBuilder();
+        var position = 0;
+        while (position + 4 < unformattedKey.Length)
+        {
+            result.Append(unformattedKey.AsSpan(position, 4)).Append(' ');
+            position += 4;
+        }
+        if (position < unformattedKey.Length)
+            result.Append(unformattedKey.AsSpan(position));
+
+        return result.ToString().ToLowerInvariant();
+    }
+
+    private async Task VerifyAndEnableAsync()
+    {
+        _error = null;
+        var code = _verificationCode.Replace(" ", string.Empty).Replace("-", string.Empty);
+        var isValid = await UserManager.VerifyTwoFactorTokenAsync(_user!, TokenOptions.DefaultAuthenticatorProvider, code);
+
+        if (!isValid)
+        {
+            _error = "Kod geçersiz veya süresi dolmuş. Tekrar deneyin.";
+            return;
+        }
+
+        await UserManager.SetTwoFactorEnabledAsync(_user!, true);
+        _isEnabled = true;
+        _verificationCode = "";
+    }
+
+    private async Task DisableAsync()
+    {
+        await UserManager.SetTwoFactorEnabledAsync(_user!, false);
+        // Eski anahtarı geçersiz kılar - yeniden etkinleştirmede TAZE bir anahtar/QR üretilir.
+        await UserManager.ResetAuthenticatorKeyAsync(_user!);
+        _isEnabled = false;
+        await LoadSharedKeyAsync(_user!);
+    }
+}

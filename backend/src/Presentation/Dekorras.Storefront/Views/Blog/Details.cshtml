@@ -1,0 +1,19 @@
+@using Dekorras.Application.Content.Queries
+@model BlogPostDetailDto
+@{
+    ViewData["Title"] = Model.Title;
+}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-controller="Blog" asp-action="Index">Blog</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@Model.Title</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-1">@Model.Title</h1>
+@if (Model.PublishedAtUtc is not null)
+{
+    <p class="text-muted small">@Model.PublishedAtUtc.Value.ToLocalTime().ToString("dd.MM.yyyy")</p>
+}
+<div class="dk-cms-content">@Html.Raw(Model.ContentHtml)</div>

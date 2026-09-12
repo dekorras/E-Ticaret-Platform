@@ -1,0 +1,165 @@
+@using Dekorras.Application.Catalog.Storefront
+@using Dekorras.Application.Content.Helpers
+@using Dekorras.Application.Content.Models
+@using Dekorras.Domain.Content
+@model Dekorras.Application.Content.Queries.BannerContentDto
+@inject MediatR.ISender Sender
+@{
+    // Aktiflik/zamanlama kontrolü GetBannerZoneTreeQuery içinde sunucu tarafında zaten yapıldı,
+    // burada tekrar IsActive/StartDateUtc/EndDateUtc kontrolü YOK.
+    var linkRel = Model.LinkTarget == "_blank" ? "noopener" : null;
+}
+@switch (Model.ContentType)
+{
+    case BannerContentType.Image:
+    {
+        @* Görseli henüz yüklenmemiş (ör. admin içeriği oluşturup görseli sonra ekleyecek) bir
+           içerik hiç render edilmez - aksi halde kırık "src" olan bir <img> etiketi kalırdı. *@
+        if (string.IsNullOrWhiteSpace(Model.ImageUrl)) { break; }
+        <div class="dk-bnr-image">
+            @if (!string.IsNullOrWhiteSpace(Model.LinkUrl))
+            {
+                <a href="@Model.LinkUrl" target="@Model.LinkTarget" rel="@linkRel">
+                    @if (!string.IsNullOrWhiteSpace(Model.ImageUrlMobile))
+                    {
+                        <picture>
+                            <source media="(max-width: 767px)" srcset="@Model.ImageUrlMobile" />
+                            <img src="@Model.ImageUrl" alt="@Model.AltText" class="img-fluid" loading="lazy" />
+                        </picture>
+                    }
+                    else
+                    {
+                        <img src="@Model.ImageUrl" alt="@Model.AltText" class="img-fluid" loading="lazy" />
+                    }
+                </a>
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(Model.ImageUrlMobile))
+                {
+                    <picture>
+                        <source media="(max-width: 767px)" srcset="@Model.ImageUrlMobile" />
+                        <img src="@Model.ImageUrl" alt="@Model.AltText" class="img-fluid" loading="lazy" />
+                    </picture>
+                }
+                else
+                {
+                    <img src="@Model.ImageUrl" alt="@Model.AltText" class="img-fluid" loading="lazy" />
+                }
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.AltText))
+            {
+                @* "Alternatif Metin" doluysa görselin üzerine görünür bir metin bindirmesi olarak
+                   basılır (rengi/hizalaması admin'de içerik düzenleme panelinin "Metin Bindirme
+                   Stili" alanından ayarlanır) - HTML alt özniteliği KULLANIMI değişmedi, bu ayrıca
+                   görünen bir katmandır. *@
+                var overlaySettings = BannerSettingsJson.Deserialize<BannerContentSettings>(Model.SettingsJson) ?? new BannerContentSettings();
+                <div class="dk-bnr-image-text-overlay" style="@BannerCssBuilder.BuildImageOverlayStyle(overlaySettings)">
+                    <span>@Model.AltText</span>
+                </div>
+            }
+        </div>
+        break;
+    }
+    case BannerContentType.ImageWithOverlay:
+    {
+        if (string.IsNullOrWhiteSpace(Model.ImageUrl)) { break; }
+        <div class="dk-bnr-overlay-wrap">
+            @if (!string.IsNullOrWhiteSpace(Model.ImageUrlMobile))
+            {
+                <picture>
+                    <source media="(max-width: 767px)" srcset="@Model.ImageUrlMobile" />
+                    <img src="@Model.ImageUrl" alt="@Model.AltText" class="img-fluid" loading="lazy" />
+                </picture>
+            }
+            else
+            {
+                <img src="@Model.ImageUrl" alt="@Model.AltText" class="img-fluid" loading="lazy" />
+            }
+            <div class="dk-bnr-overlay">
+                @if (!string.IsNullOrWhiteSpace(Model.Title))
+                {
+                    <h3 class="dk-bnr-overlay-title">@Model.Title</h3>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.Subtitle))
+                {
+                    <p class="dk-bnr-subtitle">@Model.Subtitle</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.ButtonText) && !string.IsNullOrWhiteSpace(Model.LinkUrl))
+                {
+                    <a class="btn btn-primary dk-bnr-btn" href="@Model.LinkUrl" target="@Model.LinkTarget" rel="@linkRel">@Model.ButtonText</a>
+                }
+            </div>
+        </div>
+        break;
+    }
+    case BannerContentType.Heading:
+    {
+        var contentSettings = BannerSettingsJson.Deserialize<BannerContentSettings>(Model.SettingsJson) ?? new BannerContentSettings();
+        var level = contentSettings.HeadingLevel is >= 2 and <= 6 ? contentSettings.HeadingLevel.Value : 2;
+        @Html.Raw($"<h{level} class=\"dk-bnr-heading\">")
+        @Model.Title
+        @Html.Raw($"</h{level}>")
+        if (!string.IsNullOrWhiteSpace(Model.Subtitle))
+        {
+            <p class="dk-bnr-subtitle">@Model.Subtitle</p>
+        }
+        break;
+    }
+    case BannerContentType.Text:
+    {
+        @* Admin tarafından girilen HTML - CmsPage/BlogPost ile aynı güven modeli, sanitize edilmiyor. *@
+        <div class="dk-bnr-text">@Html.Raw(Model.Body)</div>
+        break;
+    }
+    case BannerContentType.Button:
+    {
+        <a class="btn btn-primary dk-bnr-btn" href="@Model.LinkUrl" target="@Model.LinkTarget" rel="@linkRel">@Model.ButtonText</a>
+        break;
+    }
+    case BannerContentType.LinkList:
+    {
+        @* Body burada admin tarafından hazırlanmış <li>...</li> HTML parçası olarak beklenir - ayrı bir JSON şeması icat edilmedi. *@
+        <ul class="dk-bnr-linklist">@Html.Raw(Model.Body)</ul>
+        break;
+    }
+    case BannerContentType.Video:
+    {
+        if (string.IsNullOrWhiteSpace(Model.LinkUrl))
+        {
+            <video controls class="dk-bnr-video" src="@Model.ImageUrl"></video>
+        }
+        else
+        {
+            @* Admin, YouTube/Vimeo embed URL'sini olduğu gibi yapıştırır - ekstra bir URL ayrıştırma yok. *@
+            <iframe class="dk-bnr-video" src="@Model.LinkUrl" allowfullscreen frameborder="0"></iframe>
+        }
+        break;
+    }
+    case BannerContentType.RawHtml:
+    {
+        @Html.Raw(Model.Body)
+        break;
+    }
+    case BannerContentType.Spacer:
+    {
+        @* Body bu içerik tipi için CSS height değeri taşımak üzere yeniden kullanılıyor (ör. "60px"). *@
+        <div class="dk-bnr-spacer" style="height:@(Model.Body ?? "40px")"></div>
+        break;
+    }
+    case BannerContentType.ProductWidget:
+    {
+        var widgetSettings = BannerSettingsJson.Deserialize<BannerContentSettings>(Model.SettingsJson) ?? new BannerContentSettings();
+        if (widgetSettings.CategoryId is not null)
+        {
+            var language = StorefrontLanguage.GetLanguage(Context);
+            var customerGroupId = await StorefrontCustomerGroup.ResolveAsync(Sender, User);
+            var result = await Sender.Send(new GetStorefrontProductsQuery(
+                language, widgetSettings.CategoryId, Page: 1, PageSize: widgetSettings.ProductCount ?? 4, CustomerGroupId: customerGroupId));
+            <div class="dk-bnr-product-widget">
+                @await Html.PartialAsync("_ProductGrid", result.Items)
+            </div>
+        }
+        break;
+    }
+}

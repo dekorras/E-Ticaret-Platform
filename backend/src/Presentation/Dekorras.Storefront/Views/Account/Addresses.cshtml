@@ -1,0 +1,74 @@
+@using Dekorras.Application.Customers.Queries
+@model IReadOnlyCollection<CustomerAddressDto>
+@{
+    ViewData["Title"] = "Adreslerim";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Adreslerim</h1>
+    <a class="btn btn-primary btn-sm" asp-controller="Account" asp-action="AddAddress">+ Yeni Adres</a>
+</div>
+
+@if (Model.Count == 0)
+{
+    <p class="text-muted">Henüz kayıtlı bir adresiniz yok.</p>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-md-2 g-3">
+        @foreach (var address in Model)
+        {
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <p class="mb-1"><strong>@address.RecipientName</strong></p>
+                        <p class="mb-1 text-muted">
+                            @address.AddressLine1
+                            @if (!string.IsNullOrWhiteSpace(address.AddressLine2)) { <text><br />@address.AddressLine2</text> }
+                            <br />
+                            @if (!string.IsNullOrWhiteSpace(address.District)) { <text>@address.District, </text> }
+                            @address.City
+                            @if (!string.IsNullOrWhiteSpace(address.State)) { <text>, @address.State</text> }
+                            @if (!string.IsNullOrWhiteSpace(address.PostalCode)) { <text> @address.PostalCode</text> }
+                            <br />
+                            @address.CountryCode
+                        </p>
+                        <p class="mb-2 text-muted">@address.PhoneNumber</p>
+
+                        <div class="mb-2">
+                            @if (address.IsDefaultShipping)
+                            {
+                                <span class="badge bg-success me-1">Varsayılan Teslimat</span>
+                            }
+                            @if (address.IsDefaultBilling)
+                            {
+                                <span class="badge bg-info me-1">Varsayılan Fatura</span>
+                            }
+                        </div>
+
+                        <div class="d-flex gap-1 flex-wrap">
+                            @if (!address.IsDefaultShipping)
+                            {
+                                <form asp-controller="Account" asp-action="SetDefaultShippingAddress" method="post">
+                                    <input type="hidden" name="addressId" value="@address.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-success">Teslimat Varsayılanı Yap</button>
+                                </form>
+                            }
+                            @if (!address.IsDefaultBilling)
+                            {
+                                <form asp-controller="Account" asp-action="SetDefaultBillingAddress" method="post">
+                                    <input type="hidden" name="addressId" value="@address.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-info">Fatura Varsayılanı Yap</button>
+                                </form>
+                            }
+                            <form asp-controller="Account" asp-action="RemoveAddress" method="post">
+                                <input type="hidden" name="addressId" value="@address.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Sil</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

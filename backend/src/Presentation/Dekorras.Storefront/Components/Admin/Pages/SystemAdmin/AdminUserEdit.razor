@@ -1,0 +1,103 @@
+﻿@page "/admin/system/admins/new"
+@attribute [Authorize(Policy = "SysAdminOnly")]
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Dekorras.Application.SystemAdmin.Commands
+@using Dekorras.Application.SystemAdmin.Queries
+@using Microsoft.AspNetCore.Identity
+@inject MediatR.ISender Sender
+@inject UserManager<IdentityUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Yönetici Ekle</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Yönetici Ekle</h4>
+</div>
+
+<div class="card" style="max-width: 500px;">
+    <div class="card-body">
+        <div class="mb-2">
+            <label class="form-label">E-posta</label>
+            <input type="email" class="form-control" @bind="_newEmail" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Şifre</label>
+            <input type="password" class="form-control" @bind="_newPassword" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Ad Soyad</label>
+            <input class="form-control" @bind="_newFullName" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Rol (isteğe bağlı)</label>
+            <select class="form-select" @bind="_newRoleId">
+                <option value="">Rol atama</option>
+                @if (_roles is not null)
+                {
+                    @foreach (var role in _roles)
+                    {
+                        <option value="@role.Id">@role.Name</option>
+                    }
+                }
+            </select>
+        </div>
+
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+
+        <button class="btn btn-success" @onclick="CreateAdminAsync">Ekle</button>
+        <a class="btn btn-secondary ms-2" href="/admin/system/admins">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyCollection<RoleDto>? _roles;
+
+    private string _newEmail = "";
+    private string _newPassword = "";
+    private string _newFullName = "";
+    private string _newRoleId = "";
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _roles = await Sender.Send(new GetRolesQuery());
+    }
+
+    private async Task<string?> GetActingIdentityUserIdAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        return state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
+
+    private async Task CreateAdminAsync()
+    {
+        try
+        {
+            var existing = await UserManager.FindByEmailAsync(_newEmail);
+            if (existing is not null)
+                throw new InvalidOperationException("Bu e-posta zaten kullanılıyor.");
+
+            var identityUser = new IdentityUser { UserName = _newEmail, Email = _newEmail, EmailConfirmed = true };
+            var createResult = await UserManager.CreateAsync(identityUser, _newPassword);
+            if (!createResult.Succeeded)
+                throw new InvalidOperationException(string.Join(", ", createResult.Errors.Select(e => e.Description)));
+
+            var actingId = await GetActingIdentityUserIdAsync() ?? "";
+            var profileId = await Sender.Send(new CreateAdminProfileCommand(identityUser.Id, _newFullName, actingId));
+
+            if (Guid.TryParse(_newRoleId, out var roleId))
+                await Sender.Send(new AssignRoleToAdminCommand(profileId, roleId, actingId));
+
+            NavigationManager.NavigateTo("/admin/system/admins");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+}

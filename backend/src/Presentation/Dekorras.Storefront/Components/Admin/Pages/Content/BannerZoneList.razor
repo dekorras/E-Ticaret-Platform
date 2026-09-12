@@ -1,0 +1,87 @@
+@page "/admin/cms/banner-zones"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.Content.Commands
+@using Dekorras.Application.Content.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>Banner Bölgeleri</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Banner Bölgeleri</h4>
+    <a class="btn btn-primary" href="/admin/cms/banner-zones/new">+ Yeni Bölge</a>
+</div>
+<p class="text-muted">
+    Anasayfa ve diğer sayfalardaki dinamik, sürükle-bırak ile düzenlenebilir banner alanları burada
+    tanımlanır. Bir bölgeyi oluşturduktan sonra "Ağacı Düzenle" ile satır/kolon/içerik yapısını
+    düzenleyebilirsiniz.
+</p>
+
+@if (_zones is null)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_zones.Count == 0)
+{
+    <p class="text-muted">Henüz bir banner bölgesi yok.</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table id="bannerZonesTable" class="table table-nowrap align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Anahtar</th>
+                            <th>Ad</th>
+                            <th>Açıklama</th>
+                            <th>Durum</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var zone in _zones)
+                        {
+                            <tr>
+                                <td><code>@zone.Key</code></td>
+                                <td>@zone.Name</td>
+                                <td class="text-muted">@zone.Description</td>
+                                <td>
+                                    <span class="badge @(zone.IsActive ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")">@(zone.IsActive ? "Aktif" : "Pasif")</span>
+                                </td>
+                                <td>
+                                    <a class="btn btn-sm btn-outline-primary" href="/admin/cms/banner-zones/@zone.Id/builder">Ağacı Düzenle</a>
+                                    <a class="btn btn-sm btn-outline-secondary ms-1" href="/admin/cms/banner-zones/@zone.Id">Düzenle</a>
+                                    @if (zone.IsActive)
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning ms-1" @onclick="() => ToggleActiveAsync(zone.Id, false)">Pasife Al</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-success ms-1" @onclick="() => ToggleActiveAsync(zone.Id, true)">Aktifleştir</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <DataTableScript TableId="bannerZonesTable" ReloadToken="_zones" />
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyCollection<BannerZoneDto>? _zones;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _zones = await Sender.Send(new GetBannerZonesQuery());
+
+    private async Task ToggleActiveAsync(Guid id, bool isActive)
+    {
+        await Sender.Send(new SetBannerZoneActiveCommand(id, isActive));
+        await LoadAsync();
+    }
+}

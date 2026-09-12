@@ -1,0 +1,100 @@
+@using Dekorras.Application.Catalog.Storefront
+@using Dekorras.Domain.Catalog
+@model IReadOnlyCollection<StorefrontProductListItemDto>
+@{
+    var compareIds = StorefrontCompareList.GetProductIds(Context);
+    // Sütun sayısı artık sabit bir Bootstrap `row-cols-md-4` yerine `data-cols` özniteliğiyle
+    // (bkz. product-grid.css - AYNI Bootstrap yüzde mantığıyla, 2/3/4 sütun) belirleniyor - bu
+    // sayede ürün listeleme sayfasındaki araç çubuğu (`_ProductToolbar`/`product-view.js`)
+    // kullanıcının seçtiği sütun sayısını çalışma zamanında DEĞİŞTİREBİLİYOR. Bu partial'ın diğer
+    // KULLANIM YERLERİ (Anasayfa blokları, BannerZone ürün widget'ı, Ürün Detayı "Benzer Ürünler")
+    // `ViewData["ProductGridDefaultCols"]` AYARLAMADIĞI için varsayılan 4'te kalır - eski
+    // `row-cols-md-4` görünümüyle BİREBİR aynı, hiçbir görsel değişiklik YOK.
+    var defaultCols = ViewData["ProductGridDefaultCols"] as int? ?? 4;
+}
+
+@if (Model.Count == 0)
+{
+    <p class="text-muted">@Localizer["Gösterilecek ürün bulunamadı."]</p>
+}
+else
+{
+    <div class="row g-4" data-product-row data-cols="@defaultCols">
+        @foreach (var product in Model)
+        {
+            <div class="col">
+                <div class="card h-100 dk-product-card">
+                    <div class="dk-product-card-media">
+                        <a asp-controller="Product" asp-action="Details" asp-route-slug="@product.Slug">
+                            @if (product.ImageUrl is not null)
+                            {
+                                <img src="@product.ImageUrl" class="card-img-top" alt="@product.Name" loading="lazy" />
+                            }
+                            else
+                            {
+                                <div class="d-flex align-items-center justify-content-center bg-light text-muted card-img-top">@Localizer["Görsel Yok"]</div>
+                            }
+                        </a>
+                        <button type="button" class="btn btn-sm btn-light dk-quickview-btn" data-slug="@product.Slug" title="@Localizer["Hızlı Bakış"]">
+                            <i class="bi bi-eye"></i> @Localizer["Hızlı Bakış"]
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <a class="text-decoration-none" asp-controller="Product" asp-action="Details" asp-route-slug="@product.Slug">@product.Name</a>
+                        </h5>
+                        @if (product.PricesVisible)
+                        {
+                            <p class="card-text fw-bold">@Html.Money(product.PriceTry) <small class="text-muted">@Localizer["(KDV %{0} dahil değil)", product.TaxRatePercentage.ToString("0")]</small></p>
+                        }
+                        else
+                        {
+                            <p class="card-text fw-bold text-muted">@Localizer["Fiyat için bizimle iletişime geçin"]</p>
+                        }
+                        <p class="card-text">
+                            @if (product.InStock)
+                            {
+                                <span class="badge bg-success">@Localizer["Stokta Var"]</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">@Localizer["Stokta Yok"]</span>
+                            }
+                        </p>
+                        <div class="d-flex gap-1 flex-wrap">
+                            @if (!product.PricesVisible)
+                            {
+                                <span class="text-muted small">@Localizer["Fiyat almak için bizimle iletişime geçin."]</span>
+                            }
+                            else if (product.InStock)
+                            {
+                                <form asp-controller="Cart" asp-action="Add" method="post">
+                                    <input type="hidden" name="productId" value="@product.Id" />
+                                    <input type="hidden" name="quantity" value="1" />
+                                    <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                                    <button type="submit" class="btn btn-sm btn-primary">@Localizer["Sepete Ekle"]</button>
+                                </form>
+                            }
+                            @if (compareIds.Contains(product.Id))
+                            {
+                                <form asp-controller="Compare" asp-action="Remove" method="post">
+                                    <input type="hidden" name="productId" value="@product.Id" />
+                                    <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">@Localizer["Karşılaştırmadan Çıkar"]</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form asp-controller="Compare" asp-action="Add" method="post">
+                                    <input type="hidden" name="productId" value="@product.Id" />
+                                    <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">@Localizer["Karşılaştır"]</button>
+                                </form>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

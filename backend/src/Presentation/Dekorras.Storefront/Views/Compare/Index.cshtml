@@ -1,0 +1,81 @@
+@using Dekorras.Application.Catalog.Storefront
+@model IReadOnlyCollection<ComparisonProductDto>
+@{
+    ViewData["Title"] = "Ürün Karşılaştırma";
+    var allAttributeNames = Model.SelectMany(p => p.Attributes.Keys).Distinct().OrderBy(n => n).ToList();
+}
+
+<h1 class="h3 mb-3">Ürün Karşılaştırma</h1>
+
+@if (Model.Count == 0)
+{
+    <p class="text-muted">Karşılaştırma listeniz boş. Ürün sayfalarından "Karşılaştır" butonuyla ekleyebilirsiniz.</p>
+    <a class="btn btn-primary" asp-controller="Home" asp-action="Index">Alışverişe Devam Et</a>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-bordered align-middle">
+            <thead>
+                <tr>
+                    <th style="width: 160px;"></th>
+                    @foreach (var product in Model)
+                    {
+                        <th style="min-width: 220px;">
+                            <a asp-controller="Product" asp-action="Details" asp-route-slug="@product.Slug">
+                                @if (product.ImageUrl is not null)
+                                {
+                                    <img src="@product.ImageUrl" style="height: 120px; object-fit: cover;" class="d-block mb-2" alt="@product.Name" />
+                                }
+                                <span class="text-decoration-none">@product.Name</span>
+                            </a>
+                            <form asp-controller="Compare" asp-action="Remove" method="post" class="mt-2">
+                                <input type="hidden" name="productId" value="@product.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Listeden Çıkar</button>
+                            </form>
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>Fiyat</th>
+                    @foreach (var product in Model)
+                    {
+                        <td class="fw-bold">@Html.Money(product.PriceTry)</td>
+                    }
+                </tr>
+                <tr>
+                    <th>Stok Durumu</th>
+                    @foreach (var product in Model)
+                    {
+                        <td>
+                            @if (product.InStock)
+                            {
+                                <span class="badge bg-success">Stokta Var</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Stokta Yok</span>
+                            }
+                        </td>
+                    }
+                </tr>
+                @foreach (var attributeName in allAttributeNames)
+                {
+                    <tr>
+                        <th>@attributeName</th>
+                        @foreach (var product in Model)
+                        {
+                            <td>@(product.Attributes.TryGetValue(attributeName, out var value) ? value : "—")</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <form asp-controller="Compare" asp-action="Clear" method="post">
+        <button type="submit" class="btn btn-outline-secondary">Listeyi Temizle</button>
+    </form>
+}

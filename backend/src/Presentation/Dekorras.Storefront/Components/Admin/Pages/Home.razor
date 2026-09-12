@@ -1,0 +1,70 @@
+﻿@page "/admin"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.SystemAdmin.Queries
+@using Dekorras.Domain.SystemAdmin
+@inject MediatR.ISender Sender
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Modül Seçimi</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Dekorras Yönetim Paneli</h4>
+</div>
+<p>Devam etmek istediğiniz modülü seçin.</p>
+
+<div class="d-flex gap-4 flex-wrap">
+    <AuthorizeView Policy="AccountingAccess">
+        <Authorized>
+            <div class="card" style="width: 20rem;">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        Muhasebe Modülü
+                        @if (_lastModule == AppModule.Accounting)
+                        {
+                            <span class="badge bg-info-subtle text-info">Son kullanılan</span>
+                        }
+                    </h5>
+                    <p class="card-text">Cari hesaplar, kasa/banka, fatura/irsaliye, teklif, gider, raporlar.</p>
+                    <a class="btn btn-primary" href="/admin/accounting">Muhasebe Modülüne Gir</a>
+                </div>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Policy="ECommerceAccess">
+        <Authorized>
+            <div class="card" style="width: 20rem;">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        E-Ticaret Modülü
+                        @if (_lastModule == AppModule.ECommerce)
+                        {
+                            <span class="badge bg-info-subtle text-info">Son kullanılan</span>
+                        }
+                    </h5>
+                    <p class="card-text">Katalog, siparişler, kampanyalar, pazaryeri entegrasyonları, müşteriler.</p>
+                    <a class="btn btn-primary" href="/admin/ecommerce">E-Ticaret Modülüne Gir</a>
+                </div>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<p class="text-muted mt-4">
+    Kartlar, oturum çerezine gömülü RBAC izin claim'lerine (bkz. <code>AppUserClaimsPrincipalFactory</code>)
+    göre filtrelenir - yalnızca yetkili olduğunuz modül(ler) görünür. Bir modüle girip çıktığınızda
+    o modül "Son kullanılan" olarak işaretlenir.
+</p>
+
+@code {
+    private AppModule? _lastModule;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (userId is not null)
+            _lastModule = await Sender.Send(new GetMyLastSelectedModuleQuery(userId));
+    }
+}

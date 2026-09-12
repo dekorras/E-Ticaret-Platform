@@ -1,0 +1,107 @@
+/* Temel sıfırlamalar - eski site.css'in içeriği + Dekorras marka tipografisi/renkleri.
+   Not: eski "sticky footer" (position:absolute + body margin-bottom) deseni KALDIRILDI -
+   yeni footer çok satırlı/dinamik yükseklikte, normal akışta en altta kalır (bkz. layout.css). */
+html {
+    font-size: 14px;
+}
+
+@media (min-width: 768px) {
+    html {
+        font-size: 16px;
+    }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+    box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem var(--dk-color-primary);
+}
+
+html {
+    position: relative;
+    min-height: 100%;
+}
+
+.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
+    color: var(--bs-secondary-color);
+    text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
+    text-align: start;
+}
+
+body {
+    font-family: var(--dk-font-body);
+    color: var(--dk-color-text);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1 0 auto;
+}
+
+h1, h2, h3, h4, h5, h6,
+.navbar-brand, .btn, .card-title, .dk-heading {
+    font-family: var(--dk-font-heading);
+}
+
+a {
+    color: var(--dk-color-primary-dark);
+}
+
+a:hover {
+    color: var(--dk-color-primary);
+}
+
+.btn-primary {
+    color: #fff;
+    background-color: var(--dk-color-primary);
+    border-color: var(--dk-color-primary);
+}
+
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+    background-color: var(--dk-color-primary-dark) !important;
+    border-color: var(--dk-color-primary-dark) !important;
+}
+
+.btn-outline-primary {
+    color: var(--dk-color-primary-dark);
+    border-color: var(--dk-color-primary);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--dk-color-primary);
+    border-color: var(--dk-color-primary);
+}
+
+.nav-pills .nav-link.active, .nav-pills .show > .nav-link {
+    color: #fff;
+    background-color: var(--dk-color-primary);
+}
+
+.border-top { border-top: 1px solid var(--dk-color-border); }
+.border-bottom { border-bottom: 1px solid var(--dk-color-border); }
+
+.box-shadow {
+    box-shadow: var(--dk-shadow-sm);
+}
+
+.card {
+    border-radius: var(--dk-radius);
+}
+
+.badge.bg-success { background-color: #4c9a4c !important; }
+
+/* CMS/blog editöründen gelen serbest metin (bkz. Cms/Page.cshtml, Blog/Details.cshtml) - yalnızca
+   görsellerin taşmasını/genişlik bozmasını önler, admin'in kendi biçimlendirmesine dokunmaz. */
+.dk-cms-content img {
+    max-width: 100%;
+    height: auto;
+}
+
+.dk-cms-content table {
+    max-width: 100%;
+    display: block;
+    overflow-x: auto;
+}

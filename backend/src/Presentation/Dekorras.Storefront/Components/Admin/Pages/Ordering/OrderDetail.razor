@@ -1,0 +1,238 @@
+﻿@page "/admin/ecommerce/orders/{Id:guid}"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Ordering.Commands
+@using Dekorras.Application.Ordering.Queries
+@using Dekorras.Domain.Ordering
+@inject MediatR.ISender Sender
+
+<PageTitle>Sipariş @_order?.OrderNumber</PageTitle>
+
+@if (_order is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <a class="btn btn-secondary mb-3" href="/admin/ecommerce/orders">← Sipariş Listesi</a>
+    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+        <h4 class="mb-sm-0">Sipariş @_order.OrderNumber</h4>
+    </div>
+    <span class="badge bg-secondary-subtle text-secondary mb-3">@OrderList.StatusLabel(_order.Status)</span>
+
+    <div class="row">
+        <div class="col-md-7">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Ürünler</h5>
+                    <div class="table-responsive table-card">
+                        <table class="table table-nowrap align-middle mb-0">
+                            <thead><tr><th>Ürün</th><th>Adet</th><th>Birim Fiyat</th><th>Tutar</th></tr></thead>
+                            <tbody>
+                                @foreach (var item in _order.Items)
+                                {
+                                    <tr>
+                                        <td>@item.ProductName</td>
+                                        <td>@item.Quantity</td>
+                                        <td>@item.UnitPriceTry.ToString("N2") ₺</td>
+                                        <td>@item.LineTotalTry.ToString("N2") ₺</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p>Ara Toplam: @_order.SubTotalTry.ToString("N2") ₺</p>
+                    <p>KDV: @_order.TaxTotalTry.ToString("N2") ₺</p>
+                    <p>Kargo: @_order.ShippingTotalTry.ToString("N2") ₺</p>
+                    <p class="fw-bold">Genel Toplam: @_order.GrandTotalTry.ToString("N2") ₺</p>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Durum Geçmişi</h5>
+                    <ul class="list-group list-group-flush">
+                        @foreach (var entry in _order.StatusHistory)
+                        {
+                            <li class="list-group-item">
+                                @OrderList.StatusLabel(entry.Status) - @entry.ChangedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                @if (entry.Note is not null) { <span class="text-muted"> (@entry.Note)</span> }
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Müşteri</h5>
+                    <p>@_order.CustomerName<br />@_order.CustomerEmail</p>
+                    <h6>Teslimat Adresi</h6>
+                    <p>
+                        @_order.ShippingRecipientName<br />
+                        @_order.ShippingAddressLine1<br />
+                        @_order.ShippingCity, @_order.ShippingCountryCode<br />
+                        @_order.ShippingPhoneNumber
+                    </p>
+                    @if (_order.PaymentStatus is not null)
+                    {
+                        <p>Ödeme Durumu: <span class="badge bg-info-subtle text-info">@_order.PaymentStatus</span></p>
+                    }
+                    @if (_order.ShipmentTrackingNumber is not null)
+                    {
+                        <p>Kargo Takip No: @_order.ShipmentTrackingNumber</p>
+                    }
+                </div>
+            </div>
+
+            @if (_order.CustomsDeclaration is not null)
+            {
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Gümrük Beyanı</h5>
+                        <p class="text-muted small">
+                            Teslimat ülkesi Türkiye dışında olduğu için checkout anında otomatik oluşturuldu.
+                            Bir üründe GTİP/HS kodu girilmemişse aşağıdan elle düzeltin.
+                        </p>
+                        <div class="mb-2">
+                            <label class="form-label">HS/GTİP Kodu Özeti</label>
+                            <input class="form-control" @bind="_hsCodeSummary" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Beyan Edilen Değer (TRY)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="_declaredValueTry" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">İçerik Açıklaması</label>
+                            <textarea class="form-control" rows="2" @bind="_contentDescription"></textarea>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="UpdateCustomsDeclarationAsync">Kaydet</button>
+                    </div>
+                </div>
+            }
+
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Durum Değiştir</h5>
+
+                    @if (_order.ValidNextStatuses.Count == 0)
+                    {
+                        <p class="text-muted">Bu sipariş nihai bir durumda - başka bir duruma geçilemez.</p>
+                    }
+                    else
+                    {
+                        @foreach (var status in _order.ValidNextStatuses)
+                        {
+                            @if (status == OrderStatus.Shipped)
+                            {
+                                <div class="input-group mb-2">
+                                    <input class="form-control" placeholder="Kargo takip no" @bind="_trackingNumber" />
+                                    <button class="btn btn-outline-primary" @onclick="AttachTrackingAsync">Kargoya Ver</button>
+                                </div>
+                            }
+                            else if (status == OrderStatus.Refunded)
+                            {
+                                <button class="btn btn-outline-danger me-2 mb-2" @onclick="RefundAsync">
+                                    İade Et (ödeme sağlayıcısına gerçek iade isteği gönderir)
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-outline-secondary me-2 mb-2" @onclick="() => TransitionAsync(status)">
+                                    @OrderList.StatusLabel(status)
+                                </button>
+                            }
+                        }
+                    }
+
+                    @if (_errorMessage is not null)
+                    {
+                        <p class="text-danger mt-2">@_errorMessage</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private OrderDetailDto? _order;
+    private string _trackingNumber = "";
+    private string? _errorMessage;
+    private string _hsCodeSummary = "";
+    private decimal _declaredValueTry;
+    private string _contentDescription = "";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _order = await Sender.Send(new GetOrderByIdQuery(Id));
+        _errorMessage = null;
+
+        if (_order?.CustomsDeclaration is { } declaration)
+        {
+            _hsCodeSummary = declaration.HsCodeSummary;
+            _declaredValueTry = declaration.DeclaredValueTry;
+            _contentDescription = declaration.ContentDescription;
+        }
+    }
+
+    private async Task UpdateCustomsDeclarationAsync()
+    {
+        try
+        {
+            await Sender.Send(new UpdateCustomsDeclarationCommand(Id, _hsCodeSummary, _declaredValueTry, _contentDescription));
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task TransitionAsync(OrderStatus newStatus)
+    {
+        try
+        {
+            await Sender.Send(new TransitionOrderStatusCommand(Id, newStatus, null));
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task AttachTrackingAsync()
+    {
+        try
+        {
+            await Sender.Send(new AttachTrackingNumberCommand(Id, _trackingNumber));
+            _trackingNumber = "";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task RefundAsync()
+    {
+        try
+        {
+            await Sender.Send(new RefundOrderCommand(Id, null));
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+}

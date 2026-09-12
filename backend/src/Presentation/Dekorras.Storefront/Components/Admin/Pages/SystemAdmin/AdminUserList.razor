@@ -1,0 +1,120 @@
+﻿@page "/admin/system/admins"
+@attribute [Authorize(Policy = "SysAdminOnly")]
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Dekorras.Application.SystemAdmin.Commands
+@using Dekorras.Application.SystemAdmin.Queries
+@using Microsoft.AspNetCore.Identity
+@inject MediatR.ISender Sender
+@inject UserManager<IdentityUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Yöneticiler</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yöneticiler</h4>
+    <a class="btn btn-primary" href="/admin/system/admins/new">+ Yeni Yönetici Ekle</a>
+</div>
+<p class="text-muted">
+    Admin paneline giriş yapabilen kullanıcılar ve bunlara atanmış <a href="/admin/system/roles">roller</a>.
+</p>
+
+@if (_rows is null || _roles is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table id="adminUsersTable" class="table table-nowrap align-middle mb-0">
+                    <thead><tr><th>E-posta</th><th>Ad Soyad</th><th>Roller</th><th>Rol Ata</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.Email</td>
+                                <td>@row.Profile.FullName</td>
+                                <td>
+                                    @foreach (var roleId in row.Profile.RoleIds)
+                                    {
+                                        var role = _roles.FirstOrDefault(r => r.Id == roleId);
+                                        if (role is not null)
+                                        {
+                                            <span class="badge bg-primary-subtle text-primary me-1">
+                                                @role.Name
+                                                <button type="button" class="btn-close btn-close-white btn-sm ms-1" style="font-size:0.5rem;"
+                                                        @onclick="() => RevokeRoleAsync(row.Profile.Id, roleId)" title="Kaldır"></button>
+                                            </span>
+                                        }
+                                    }
+                                </td>
+                                <td>
+                                    <select class="form-select form-select-sm d-inline-block w-auto" @bind="_assignSelections[row.Profile.Id]">
+                                        <option value="">Rol seçin...</option>
+                                        @foreach (var role in _roles.Where(r => !row.Profile.RoleIds.Contains(r.Id)))
+                                        {
+                                            <option value="@role.Id">@role.Name</option>
+                                        }
+                                    </select>
+                                    <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => AssignRoleAsync(row.Profile.Id)">Ata</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <DataTableScript TableId="adminUsersTable" ReloadToken="_rows" />
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private sealed record AdminRow(AdminProfileDto Profile, string Email);
+
+    private List<AdminRow>? _rows;
+    private IReadOnlyCollection<RoleDto>? _roles;
+    private readonly Dictionary<Guid, string> _assignSelections = new();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var profiles = await Sender.Send(new GetAdminProfilesQuery());
+        _roles = await Sender.Send(new GetRolesQuery());
+
+        var rows = new List<AdminRow>();
+        foreach (var profile in profiles)
+        {
+            var identityUser = await UserManager.FindByIdAsync(profile.IdentityUserId);
+            rows.Add(new AdminRow(profile, identityUser?.Email ?? "(bilinmiyor)"));
+            _assignSelections.TryAdd(profile.Id, "");
+        }
+        _rows = rows;
+    }
+
+    private async Task<string?> GetActingIdentityUserIdAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        return state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
+
+    private async Task AssignRoleAsync(Guid adminProfileId)
+    {
+        if (!_assignSelections.TryGetValue(adminProfileId, out var roleIdText) || !Guid.TryParse(roleIdText, out var roleId))
+            return;
+
+        var actingId = await GetActingIdentityUserIdAsync() ?? "";
+        await Sender.Send(new AssignRoleToAdminCommand(adminProfileId, roleId, actingId));
+        _assignSelections[adminProfileId] = "";
+        await LoadAsync();
+    }
+
+    private async Task RevokeRoleAsync(Guid adminProfileId, Guid roleId)
+    {
+        var actingId = await GetActingIdentityUserIdAsync() ?? "";
+        await Sender.Send(new RevokeRoleFromAdminCommand(adminProfileId, roleId, actingId));
+        await LoadAsync();
+    }
+}

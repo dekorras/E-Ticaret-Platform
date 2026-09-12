@@ -1,0 +1,20 @@
+@{
+    ViewData["Title"] = "Bülten Aboneliği Onayı";
+    var success = ViewBag.Success as bool? ?? false;
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-6 text-center">
+        @if (success)
+        {
+            <h1 class="h3 mb-3 text-success">Aboneliğiniz Onaylandı</h1>
+            <p class="text-muted">Bültenimize abone olduğunuz için teşekkür ederiz.</p>
+        }
+        else
+        {
+            <h1 class="h3 mb-3 text-danger">Onay Bağlantısı Geçersiz</h1>
+            <p class="text-muted">Bu bağlantı geçersiz veya süresi dolmuş olabilir.</p>
+        }
+        <a class="btn btn-primary mt-2" asp-controller="Home" asp-action="Index">Anasayfaya Dön</a>
+    </div>
+</div>

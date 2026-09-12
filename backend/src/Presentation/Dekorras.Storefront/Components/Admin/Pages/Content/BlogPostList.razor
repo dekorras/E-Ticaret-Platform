@@ -1,0 +1,78 @@
+﻿@page "/admin/cms/blog"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.Content.Commands
+@using Dekorras.Application.Content.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>Blog Yazıları</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Blog Yazıları</h4>
+    <a class="btn btn-primary" href="/admin/cms/blog/new">+ Yeni Yazı</a>
+</div>
+<p class="text-muted">
+    Storefront'ta <code>/blog</code> altında yalnızca YAYINDA olan yazılar listelenir. Aynı yazının
+    başka bir dildeki çevirisi, AYNI slug ile ayrı bir kayıt olarak oluşturulur (Ürün/Kategori'nin
+    aksine tek bir kayıt içinde çoklu çeviri TUTULMAZ).
+</p>
+
+@if (_posts is null)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_posts.Count == 0)
+{
+    <p class="text-muted">Henüz bir yazı yok.</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table id="blogPostsTable" class="table table-nowrap align-middle mb-0">
+                    <thead><tr><th>Başlık</th><th>Slug</th><th>Dil</th><th>Durum</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var post in _posts)
+                        {
+                            <tr>
+                                <td>@post.Title</td>
+                                <td><code>/blog/@post.Slug</code></td>
+                                <td>@post.LanguageCode</td>
+                                <td>
+                                    <span class="badge @(post.IsPublished ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")">@(post.IsPublished ? "Yayında" : "Taslak")</span>
+                                </td>
+                                <td>
+                                    <a class="btn btn-sm btn-outline-secondary" href="/admin/cms/blog/@post.Id">Düzenle</a>
+                                    @if (post.IsPublished)
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning ms-1" @onclick="() => TogglePublishedAsync(post.Id, false)">Yayından Kaldır</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-success ms-1" @onclick="() => TogglePublishedAsync(post.Id, true)">Yayınla</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <DataTableScript TableId="blogPostsTable" ReloadToken="_posts" />
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyCollection<BlogPostListItemDto>? _posts;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _posts = await Sender.Send(new GetBlogPostsQuery());
+
+    private async Task TogglePublishedAsync(Guid id, bool published)
+    {
+        await Sender.Send(new SetBlogPostPublishedCommand(id, published));
+        await LoadAsync();
+    }
+}

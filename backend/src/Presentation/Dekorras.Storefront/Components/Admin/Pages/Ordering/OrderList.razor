@@ -1,0 +1,143 @@
+﻿@page "/admin/ecommerce/orders"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Ordering.Queries
+@using Dekorras.Domain.Ordering
+@inject MediatR.ISender Sender
+
+<PageTitle>Siparişler</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Siparişler</h4>
+</div>
+<p class="text-muted">
+    Kaynağı fark etmeksizin (Web/Mobil/Trendyol/Hepsiburada/...) tüm siparişler burada tek bir
+    listede birleşir (bkz. plan §9.1). Filtreleme: sipariş no, müşteri, durum, tutar, tarih aralığı
+    (bkz. plan §2.5).
+</p>
+
+<div class="row g-2 mb-3 align-items-end">
+    <div class="col-auto">
+        <label class="form-label small mb-0">Sipariş No</label>
+        <input class="form-control form-control-sm" @bind="_orderNumberFilter" @bind:after="LoadAsync" style="width: 160px;" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Müşteri</label>
+        <input class="form-control form-control-sm" @bind="_customerNameFilter" @bind:after="LoadAsync" style="width: 160px;" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Durum</label>
+        <select class="form-select form-select-sm" @bind="_statusFilterText" @bind:after="LoadAsync">
+            <option value="">Tümü</option>
+            @foreach (var status in Enum.GetValues<OrderStatus>())
+            {
+                <option value="@status">@StatusLabel(status)</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Min. Tutar</label>
+        <input type="number" step="0.01" class="form-control form-control-sm" @bind="_minAmountText" @bind:after="LoadAsync" style="width: 110px;" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Max. Tutar</label>
+        <input type="number" step="0.01" class="form-control form-control-sm" @bind="_maxAmountText" @bind:after="LoadAsync" style="width: 110px;" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Başlangıç Tarihi</label>
+        <input type="date" class="form-control form-control-sm" @bind="_fromDate" @bind:after="LoadAsync" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Bitiş Tarihi</label>
+        <input type="date" class="form-control form-control-sm" @bind="_toDate" @bind:after="LoadAsync" />
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive table-card">
+            <table id="ordersTable" class="table table-nowrap align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Sipariş No</th>
+                        <th>Müşteri</th>
+                        <th>Kaynak</th>
+                        <th>Tarih</th>
+                        <th>Tutar</th>
+                        <th>Durum</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_orders is not null)
+                    {
+                        @foreach (var order in _orders)
+                        {
+                            <tr>
+                                <td>@order.OrderNumber</td>
+                                <td>@order.CustomerName</td>
+                                <td>@order.Source</td>
+                                @* data-order: ISO 8601 - DataTables varsayılan METİN sıralaması "dd.MM.yyyy"
+                                   formatını GÜN'e göre değil karışık sıralardı. *@
+                                <td data-order="@order.CreatedAtUtc.ToString("o")">@order.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                <td data-order="@order.GrandTotalTry.ToString(System.Globalization.CultureInfo.InvariantCulture)">@order.GrandTotalTry.ToString("N2") ₺</td>
+                                <td><span class="badge bg-secondary-subtle text-secondary">@StatusLabel(order.Status)</span></td>
+                                <td><a class="btn btn-sm btn-outline-primary" href="/admin/ecommerce/orders/@order.Id">Detay</a></td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+            <DataTableScript TableId="ordersTable" ReloadToken="_orders" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _statusFilterText = "";
+    private string _orderNumberFilter = "";
+    private string _customerNameFilter = "";
+    private string _minAmountText = "";
+    private string _maxAmountText = "";
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private IReadOnlyCollection<OrderListItemDto>? _orders;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        OrderStatus? statusFilter = Enum.TryParse<OrderStatus>(_statusFilterText, out var parsedStatus) ? parsedStatus : null;
+        decimal? minAmount = decimal.TryParse(_minAmountText, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsedMin) ? parsedMin : null;
+        decimal? maxAmount = decimal.TryParse(_maxAmountText, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsedMax) ? parsedMax : null;
+        DateTime? fromDate = _fromDate is DateTime f ? DateTime.SpecifyKind(f.Date, DateTimeKind.Utc) : null;
+        // Bitiş tarihi GÜN SONUNA (23:59:59) kadar dahil edilir - aksi halde seçilen günün siparişleri
+        // "gece yarısından ÖNCE" olduğu için aralığın dışında kalırdı.
+        DateTime? toDate = _toDate is DateTime t ? DateTime.SpecifyKind(t.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc) : null;
+
+        _orders = await Sender.Send(new GetOrdersQuery(
+            statusFilter,
+            string.IsNullOrWhiteSpace(_orderNumberFilter) ? null : _orderNumberFilter,
+            string.IsNullOrWhiteSpace(_customerNameFilter) ? null : _customerNameFilter,
+            minAmount, maxAmount, fromDate, toDate));
+    }
+
+    public static string StatusLabel(OrderStatus status) => status switch
+    {
+        OrderStatus.PendingApproval => "Onay Bekliyor",
+        OrderStatus.Preparing => "Hazırlanıyor",
+        OrderStatus.Prepared => "Hazırlandı",
+        OrderStatus.Shipped => "Kargoya Verildi",
+        OrderStatus.Completed => "Tamamlandı",
+        OrderStatus.Cancelled => "İptal Edildi",
+        OrderStatus.CancellationReverted => "İptal Geri Alındı",
+        OrderStatus.Refunded => "İade Edildi",
+        OrderStatus.Rejected => "Reddedildi",
+        OrderStatus.Expired => "Süresi Doldu",
+        OrderStatus.Chargeback => "Ters İbraz",
+        OrderStatus.Failed => "Başarısız",
+        OrderStatus.OnHold => "Durduruldu",
+        OrderStatus.Voided => "Hükümsüz",
+        _ => status.ToString()
+    };
+}

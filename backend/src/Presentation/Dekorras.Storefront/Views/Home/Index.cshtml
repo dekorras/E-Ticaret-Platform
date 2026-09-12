@@ -1,0 +1,42 @@
+@using Dekorras.Application.Catalog.Storefront
+@using Dekorras.Application.Content.Queries
+@using Dekorras.Storefront.Models
+@model IReadOnlyCollection<HomeCategoryBlock>
+@{
+    ViewData["Title"] = Localizer["Anasayfa"];
+    var banners = ViewBag.Banners as IReadOnlyCollection<BannerDto> ?? [];
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/home.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/banner-zone.css" asp-append-version="true" />
+}
+
+@if ((bool)ViewBag.HasBannerZoneContent)
+{
+    @await Component.InvokeAsync("BannerZone", new { zoneKey = "home-main" })
+}
+else
+{
+    @await Html.PartialAsync("_HomeHeroFallback", banners)
+}
+
+@* Anasayfa artık tüm ürünleri filtresiz göstermek yerine, admin'in "anasayfada göster" olarak
+   işaretlediği kategorilere özel modüler bloklar render eder - bkz. HomeController.Index ve
+   GetFeaturedHomepageCategoriesQuery. NOT: bu bölüm eskiden bir de kategorinin ALT kategorilerini
+   kutucuk grid'i olarak gösteren AYRI bir bölüm daha içeriyordu (üstte, bu bloklardan önce) - o
+   bölüm kullanıcının GERÇEK ekran görüntüsüyle bildirdiği isteği üzerine tamamen KALDIRILDI:
+   "anasayfada göster" işaretli bir kategori artık SADECE kendi ÜRÜNLERİNİ bu blok halinde
+   gösteriyor, alt kategori kutucukları ARTIK anasayfada YOK (bkz. backend/README.md). Alt
+   kategoriler kendi kategori sayfasında (`/Category/{slug}`) mega menüden erişilebilir olmaya
+   devam ediyor. *@
+@foreach (var block in Model)
+{
+    <section class="dk-category-section mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h4 mb-0 dk-heading">@block.CategoryName</h2>
+            <a class="small" asp-controller="Category" asp-action="Index" asp-route-slug="@block.CategorySlug">@Localizer["Tümünü Gör"] <i class="bi bi-arrow-right"></i></a>
+        </div>
+        @await Html.PartialAsync("_ProductGrid", block.Products)
+    </section>
+}

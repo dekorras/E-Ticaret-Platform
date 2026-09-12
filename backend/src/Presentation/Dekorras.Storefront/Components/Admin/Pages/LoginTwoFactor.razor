@@ -1,0 +1,31 @@
+﻿@page "/admin/login-2fa"
+
+<PageTitle>İki Faktörlü Doğrulama</PageTitle>
+
+<div class="container mt-5" style="max-width: 420px;">
+    <h1 class="mb-4">İki Faktörlü Doğrulama</h1>
+    <p class="text-muted">Kimlik doğrulama uygulamanızdaki 6 haneli kodu girin.</p>
+
+    @if (Error is not null)
+    {
+        <p class="text-danger">Geçersiz veya süresi dolmuş kod.</p>
+    }
+
+    <form action="/admin/Account/LoginWith2fa" method="post">
+        <AntiforgeryToken />
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+        <div class="mb-3">
+            <label class="form-label">Doğrulama Kodu</label>
+            <input type="text" name="code" class="form-control" inputmode="numeric" autocomplete="one-time-code" required autofocus />
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Doğrula</button>
+    </form>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    private string? ReturnUrl { get; set; }
+}

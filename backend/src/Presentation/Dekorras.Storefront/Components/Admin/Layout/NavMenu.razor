@@ -1,0 +1,134 @@
+<AuthorizeView>
+    <Authorized>
+        <ul class="navbar-nav" id="navbar-nav">
+            <li class="menu-title"><span>Menü</span></li>
+
+            <li class="nav-item">
+                <NavLink class="nav-link menu-link" href="/admin" Match="NavLinkMatch.All">
+                    <i class="ri-home-4-line"></i> <span>Modül Seçimi</span>
+                </NavLink>
+            </li>
+
+            <li class="nav-item">
+                <NavLink class="nav-link menu-link" href="/admin/integrations">
+                    <i class="ri-plug-line"></i> <span>Entegrasyonlar</span>
+                </NavLink>
+            </li>
+
+            <li class="nav-item">
+                <NavLink class="nav-link menu-link" href="/admin/system/two-factor">
+                    <i class="ri-shield-keyhole-line"></i> <span>İki Faktörlü Doğrulama</span>
+                </NavLink>
+            </li>
+
+            <AuthorizeView Policy="ECommerceAccess" Context="ecommerceAuth">
+                <Authorized>
+                    <li class="nav-item">
+                        <a class="nav-link menu-link" href="#sidebarECommerce" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarECommerce">
+                            <i class="ri-store-2-line"></i> <span>E-Ticaret</span>
+                        </a>
+                        <div class="collapse menu-dropdown" id="sidebarECommerce">
+                            <ul class="nav nav-sm flex-column">
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/ecommerce/categories">Kategoriler</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/ecommerce/brands">Markalar</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/ecommerce/products">Ürünler</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/ecommerce/orders">Siparişler</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/ecommerce/coupons">Kuponlar</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/ecommerce/campaigns">Kampanyalar</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/ecommerce/gift-vouchers">Hediye Çekleri</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/ecommerce/reviews">Değerlendirmeler ve Sorular</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/ecommerce/customers">Müşteriler</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/ecommerce/customer-groups">Müşteri Grupları</NavLink></li>
+                            </ul>
+                        </div>
+                    </li>
+                </Authorized>
+            </AuthorizeView>
+
+            <AuthorizeView Policy="AccountingAccess" Context="accountingAuth">
+                <Authorized>
+                    <li class="nav-item">
+                        <a class="nav-link menu-link" href="#sidebarAccounting" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarAccounting">
+                            <i class="ri-bank-line"></i> <span>Muhasebe</span>
+                        </a>
+                        <div class="collapse menu-dropdown" id="sidebarAccounting">
+                            <ul class="nav nav-sm flex-column">
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/accounting/ledger-accounts">Cari Hesaplar</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/accounting/invoices">Faturalar</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/accounting/cash-and-bank">Kasa ve Banka</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/accounting/expenses">Giderler</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/accounting/checks-and-notes">Çek ve Senet</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/accounting/quotes">Teklifler</NavLink></li>
+                                <li class="nav-item"><NavLink class="nav-link" href="/admin/accounting/reports">Raporlar</NavLink></li>
+                            </ul>
+                        </div>
+                    </li>
+                </Authorized>
+            </AuthorizeView>
+
+            <li class="nav-item">
+                <a class="nav-link menu-link" href="#sidebarContent" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarContent">
+                    <i class="ri-file-text-line"></i> <span>İçerik Yönetimi</span>
+                </a>
+                <div class="collapse menu-dropdown" id="sidebarContent">
+                    <ul class="nav nav-sm flex-column">
+                        <li class="nav-item">
+                            <NavLink class="nav-link" href="/admin/cms/pages">Bilgi Sayfaları</NavLink>
+                        </li>
+                        <li class="nav-item">
+                            <NavLink class="nav-link" href="/admin/cms/banners">Bannerlar</NavLink>
+                        </li>
+                        <li class="nav-item">
+                            <NavLink class="nav-link" href="/admin/cms/banner-zones">Banner Bölgeleri</NavLink>
+                        </li>
+                        <li class="nav-item">
+                            <NavLink class="nav-link" href="/admin/cms/blog">Blog Yazıları</NavLink>
+                        </li>
+                        <li class="nav-item">
+                            <NavLink class="nav-link" href="/admin/notifications/email-templates">E-posta Şablonları</NavLink>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            <AuthorizeView Policy="SysAdminOnly" Context="sysAdminAuth">
+                <Authorized>
+                    <li class="nav-item">
+                        <a class="nav-link menu-link" href="#sidebarSystem" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarSystem">
+                            <i class="ri-shield-user-line"></i> <span>Sistem Yönetimi</span>
+                        </a>
+                        <div class="collapse menu-dropdown" id="sidebarSystem">
+                            <ul class="nav nav-sm flex-column">
+                                <li class="nav-item">
+                                    <NavLink class="nav-link" href="/admin/system/roles">Roller</NavLink>
+                                </li>
+                                <li class="nav-item">
+                                    <NavLink class="nav-link" href="/admin/system/admins">Yöneticiler</NavLink>
+                                </li>
+                                <li class="nav-item">
+                                    <NavLink class="nav-link" href="/admin/system/audit-log">Denetim Kaydı</NavLink>
+                                </li>
+                                <li class="nav-item">
+                                    <NavLink class="nav-link" href="/admin/settings/contact">İletişim Ayarları</NavLink>
+                                </li>
+                                <li class="nav-item">
+                                    <NavLink class="nav-link" href="/admin/settings/layout">Site Genişliği Ayarları</NavLink>
+                                </li>
+                            </ul>
+                        </div>
+                    </li>
+                </Authorized>
+            </AuthorizeView>
+        </ul>
+    </Authorized>
+    <NotAuthorized>
+        <ul class="navbar-nav" id="navbar-nav">
+            <li class="menu-title"><span>Hesap</span></li>
+            <li class="nav-item">
+                <NavLink class="nav-link menu-link" href="/admin/login">
+                    <i class="ri-login-circle-line"></i> <span>Giriş Yap</span>
+                </NavLink>
+            </li>
+        </ul>
+    </NotAuthorized>
+</AuthorizeView>

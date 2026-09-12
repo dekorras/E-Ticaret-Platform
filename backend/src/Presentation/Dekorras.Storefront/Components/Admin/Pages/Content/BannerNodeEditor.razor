@@ -1,0 +1,193 @@
+@* Kategori ağacındaki CategoryTreeNode ile aynı özyinelemeli bileşen deseni - farkla ki burada
+   SortableJS için gerekli "nested-sortable" konteynerler ve data-node-id/data-parent-id
+   attribute'ları da eklenir (bkz. wwwroot/js/admin/banner-zone-builder.js). Komutlar burada
+   ÇALIŞTIRILMAZ - CategoryTreeNode deseninde olduğu gibi olaylar üst sayfaya (BannerZoneBuilder)
+   kabarcıklanır, MediatR çağrısı ve ağaç yeniden yükleme orada yapılır. *@
+@using Dekorras.Application.Content.Queries
+@using Dekorras.Application.Content.Models
+@using Dekorras.Domain.Content
+
+<div class="card mb-2 @(SelectedNodeId == Node.Id ? "border-primary border-2" : "")"
+     style="@(!Node.IsActive ? "opacity:.6;" : "")"
+     @onclick="() => OnSelectNode.InvokeAsync(Node.Id)" @onclick:stopPropagation="true">
+    <div class="card-body p-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            @if (Node.NodeType == BannerNodeType.Row)
+            {
+                <span class="badge bg-primary-subtle text-primary">Satır</span>
+            }
+            else
+            {
+                <span class="badge bg-info-subtle text-info">Kolon</span>
+                <span class="badge bg-light text-dark border">@GridBadgeText()</span>
+            }
+            @if (!Node.IsActive)
+            {
+                <span class="badge bg-secondary-subtle text-secondary">Pasif</span>
+            }
+            <span class="text-muted small">#@Node.SortOrder</span>
+
+            <div class="ms-auto d-flex align-items-center gap-1" @onclick:stopPropagation="true">
+                @if (Node.NodeType == BannerNodeType.Row)
+                {
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Kolonlara Böl</button>
+                        <ul class="dropdown-menu">
+                            <li><button class="dropdown-item" type="button" @onclick="() => SplitAsync([12])">12</button></li>
+                            <li><button class="dropdown-item" type="button" @onclick="() => SplitAsync([6, 6])">6 + 6</button></li>
+                            <li><button class="dropdown-item" type="button" @onclick="() => SplitAsync([4, 4, 4])">4 + 4 + 4</button></li>
+                            <li><button class="dropdown-item" type="button" @onclick="() => SplitAsync([3, 3, 3, 3])">3 + 3 + 3 + 3</button></li>
+                            <li><button class="dropdown-item" type="button" @onclick="() => SplitAsync([8, 4])">8 + 4</button></li>
+                            <li><button class="dropdown-item" type="button" @onclick="() => SplitAsync([4, 8])">4 + 8</button></li>
+                            <li><button class="dropdown-item" type="button" @onclick="() => SplitAsync([3, 6, 3])">3 + 6 + 3</button></li>
+                        </ul>
+                    </div>
+                }
+                else
+                {
+                    <button class="btn btn-sm btn-outline-primary" disabled="@(Node.Depth >= 5)"
+                            title="@(Node.Depth >= 5 ? "Maksimum iç içe geçme derinliğine ulaşıldı" : "Bu kolonun içine yeni bir satır ekle")"
+                            @onclick="() => OnAddRowToColumn.InvokeAsync(Node.Id)">+ İçine Satır Ekle</button>
+                    <button class="btn btn-sm btn-outline-success" @onclick="() => OnAddContentToColumn.InvokeAsync(Node.Id)">+ İçerik Ekle</button>
+                }
+
+                @if (_confirmingDelete)
+                {
+                    <span class="small text-danger">Emin misiniz?</span>
+                    <button class="btn btn-sm btn-danger" type="button" @onclick="() => OnDeleteNode.InvokeAsync(Node.Id)">Evet</button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="() => _confirmingDelete = false">Hayır</button>
+                }
+                else
+                {
+                    <button class="btn btn-sm btn-outline-danger" type="button" @onclick="() => _confirmingDelete = true">Sil</button>
+                }
+            </div>
+        </div>
+
+        @if (Node.NodeType == BannerNodeType.Column && Node.Contents.Count > 0)
+        {
+            <div class="d-flex flex-wrap gap-1 mt-2" @onclick:stopPropagation="true">
+                @foreach (var content in Node.Contents)
+                {
+                    <span class="badge @(SelectedContentId == content.Id ? "bg-primary" : "bg-light text-dark border") d-inline-flex align-items-center gap-1"
+                          style="cursor:pointer;" @onclick="() => OnSelectContent.InvokeAsync(content.Id)">
+                        @ContentLabel(content)
+                        <i class="ri-close-line" style="cursor:pointer;" title="İçeriği sil"
+                           @onclick="() => OnDeleteContent.InvokeAsync(content.Id)" @onclick:stopPropagation="true"></i>
+                    </span>
+                }
+            </div>
+        }
+
+        @if (Node.NodeType == BannerNodeType.Row)
+        {
+            <div class="nested-sortable d-flex gap-2 flex-wrap mt-2 p-2 border rounded bg-body-tertiary" id="@ContainerId" data-parent-id="@Node.Id">
+                @foreach (var child in Node.Children)
+                {
+                    <div style="min-width:220px;" data-node-id="@child.Id">
+                        <BannerNodeEditor Node="child" SelectedNodeId="SelectedNodeId" SelectedContentId="SelectedContentId"
+                                          OnSelectNode="OnSelectNode" OnSelectContent="OnSelectContent"
+                                          OnAddRowToColumn="OnAddRowToColumn" OnAddContentToColumn="OnAddContentToColumn"
+                                          OnSplitRow="OnSplitRow" OnDeleteNode="OnDeleteNode" OnDeleteContent="OnDeleteContent" />
+                    </div>
+                }
+                @if (Node.Children.Count == 0)
+                {
+                    <span class="text-muted small">Henüz kolon yok - "Kolonlara Böl" ile ekleyin.</span>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="nested-sortable mt-2 p-2 border rounded bg-body-tertiary" id="@ContainerId" data-parent-id="@Node.Id">
+                @foreach (var child in Node.Children)
+                {
+                    <div data-node-id="@child.Id">
+                        <BannerNodeEditor Node="child" SelectedNodeId="SelectedNodeId" SelectedContentId="SelectedContentId"
+                                          OnSelectNode="OnSelectNode" OnSelectContent="OnSelectContent"
+                                          OnAddRowToColumn="OnAddRowToColumn" OnAddContentToColumn="OnAddContentToColumn"
+                                          OnSplitRow="OnSplitRow" OnDeleteNode="OnDeleteNode" OnDeleteContent="OnDeleteContent" />
+                    </div>
+                }
+                @if (Node.Children.Count == 0)
+                {
+                    <span class="text-muted small">Bu kolonun içinde alt satır yok.</span>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public BannerNodeTreeDto Node { get; set; } = default!;
+
+    [Parameter]
+    public Guid? SelectedNodeId { get; set; }
+
+    [Parameter]
+    public Guid? SelectedContentId { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnSelectNode { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnSelectContent { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnAddRowToColumn { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnAddContentToColumn { get; set; }
+
+    [Parameter]
+    public EventCallback<(Guid RowId, int[] Widths)> OnSplitRow { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnDeleteNode { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnDeleteContent { get; set; }
+
+    /// <summary>SortableJS için bu düğümün alt-liste konteynerinin sabit id'si - bkz. BannerZoneBuilder'ın
+    /// OnAfterRenderAsync'i, her render sonrası mevcut TÜM "bnr-list-*" konteynerlerini bulup
+    /// dekorrasBannerBuilder.initSortable ile Sortable örneği kurar.</summary>
+    private string ContainerId => "bnr-list-" + Node.Id;
+
+    private bool _confirmingDelete;
+
+    private Task SplitAsync(int[] widths) => OnSplitRow.InvokeAsync((Node.Id, widths));
+
+    private string GridBadgeText()
+    {
+        var settings = BannerSettingsJson.Deserialize<BannerNodeSettings>(Node.SettingsJson)!;
+        var parts = new List<string>();
+        if (settings.ColXs is int xs) parts.Add($"xs:{xs}");
+        if (settings.ColSm is int sm) parts.Add($"sm:{sm}");
+        if (settings.ColMd is int md) parts.Add($"md:{md}");
+        if (settings.ColLg is int lg) parts.Add($"lg:{lg}");
+        if (settings.ColXl is int xl) parts.Add($"xl:{xl}");
+        if (settings.ColXxl is int xxl) parts.Add($"xxl:{xxl}");
+        return parts.Count > 0 ? string.Join(" ", parts) : "otomatik";
+    }
+
+    private static string ContentTypeLabelTr(BannerContentType type) => type switch
+    {
+        BannerContentType.Image => "Görsel",
+        BannerContentType.ImageWithOverlay => "Görsel + Metin",
+        BannerContentType.Heading => "Başlık",
+        BannerContentType.Text => "Metin",
+        BannerContentType.Button => "Buton",
+        BannerContentType.LinkList => "Bağlantı Listesi",
+        BannerContentType.Video => "Video",
+        BannerContentType.RawHtml => "Ham HTML",
+        BannerContentType.Spacer => "Boşluk",
+        BannerContentType.ProductWidget => "Ürün Vitrini",
+        _ => type.ToString()
+    };
+
+    private static string ContentLabel(BannerContentDto content) =>
+        string.IsNullOrWhiteSpace(content.Title)
+            ? ContentTypeLabelTr(content.ContentType)
+            : $"{ContentTypeLabelTr(content.ContentType)}: {content.Title}";
+}

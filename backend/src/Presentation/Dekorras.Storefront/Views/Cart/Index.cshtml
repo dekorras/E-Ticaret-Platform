@@ -1,0 +1,133 @@
+@using Dekorras.Application.Ordering.Storefront
+@model CartDto
+@{
+    ViewData["Title"] = Localizer["Sepetim"];
+    var couponMessage = TempData["CouponMessage"] as string;
+    var couponSuccess = TempData["CouponSuccess"] as bool?;
+    var giftVoucherMessage = TempData["GiftVoucherMessage"] as string;
+    var giftVoucherSuccess = TempData["GiftVoucherSuccess"] as bool?;
+}
+
+<h1 class="h3 mb-3">@Localizer["Sepetim"]</h1>
+
+@if (Model.Items.Count == 0)
+{
+    <p class="text-muted">@Localizer["Sepetiniz boş."]</p>
+    <a class="btn btn-primary" asp-controller="Home" asp-action="Index">@Localizer["Alışverişe Devam Et"]</a>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th>@Localizer["Ürün"]</th>
+                <th>@Localizer["Birim Fiyat"]</th>
+                <th>@Localizer["Adet"]</th>
+                <th>@Localizer["Ara Toplam"]</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td>
+                        <a asp-controller="Product" asp-action="Details" asp-route-slug="@item.Slug">@item.Name</a>
+                        @if (item.VariantOptionName is not null)
+                        {
+                            <div class="text-muted small">@item.VariantOptionName</div>
+                        }
+                    </td>
+                    <td>@Html.Money(item.UnitPriceTry)</td>
+                    <td style="max-width: 120px;">
+                        <form asp-controller="Cart" asp-action="UpdateQuantity" method="post" class="d-flex gap-1">
+                            <input type="hidden" name="productId" value="@item.ProductId" />
+                            <input type="hidden" name="variantId" value="@item.VariantId" />
+                            <input type="number" name="quantity" value="@item.Quantity" min="1" class="form-control form-control-sm" />
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">@Localizer["Güncelle"]</button>
+                        </form>
+                    </td>
+                    <td>@Html.Money(item.LineTotalTry)</td>
+                    <td>
+                        <form asp-controller="Cart" asp-action="Remove" method="post">
+                            <input type="hidden" name="productId" value="@item.ProductId" />
+                            <input type="hidden" name="variantId" value="@item.VariantId" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">@Localizer["Kaldır"]</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3" class="text-end">@Localizer["Ara Toplam"]</td>
+                <td>@Html.Money(Model.SubTotalTry)</td>
+                <td></td>
+            </tr>
+            @if (Model.CouponCode is not null)
+            {
+                <tr>
+                    <td colspan="3" class="text-end">@Localizer["Kupon ({0}) İndirimi", Model.CouponCode]</td>
+                    <td class="text-success">-@Html.Money(Model.DiscountTry)</td>
+                    <td>
+                        <form asp-controller="Cart" asp-action="RemoveCoupon" method="post">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">@Localizer["Kaldır"]</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            else if (Model.CampaignName is not null)
+            {
+                <tr>
+                    <td colspan="3" class="text-end">
+                        @Localizer["Kampanya İndirimi ({0})", Model.CampaignName]
+                    </td>
+                    <td class="text-success">-@Html.Money(Model.DiscountTry)</td>
+                    <td></td>
+                </tr>
+            }
+            @if (Model.GiftVoucherCode is not null)
+            {
+                <tr>
+                    <td colspan="3" class="text-end">@Localizer["Hediye Çeki ({0})", Model.GiftVoucherCode]</td>
+                    <td class="text-success">-@Html.Money(Model.GiftVoucherAmountAppliedTry)</td>
+                    <td>
+                        <form asp-controller="Cart" asp-action="RemoveGiftVoucher" method="post">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">@Localizer["Kaldır"]</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            <tr>
+                <td colspan="3" class="text-end fw-bold">@Localizer["Toplam"]</td>
+                <td class="fw-bold">@Html.Money(Model.GrandTotalTry)</td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <form asp-controller="Cart" asp-action="ApplyCoupon" method="post" class="d-flex gap-1">
+                <input type="text" name="couponCode" class="form-control" placeholder="@Localizer["Kupon Kodu"]" />
+                <button type="submit" class="btn btn-outline-primary">@Localizer["Uygula"]</button>
+            </form>
+            @if (couponMessage is not null)
+            {
+                <p class="mt-2 @(couponSuccess == true ? "text-success" : "text-danger")">@couponMessage</p>
+            }
+        </div>
+        <div class="col-md-4">
+            <form asp-controller="Cart" asp-action="ApplyGiftVoucher" method="post" class="d-flex gap-1">
+                <input type="text" name="giftVoucherCode" class="form-control" placeholder="@Localizer["Hediye Çeki Kodu"]" />
+                <button type="submit" class="btn btn-outline-primary">@Localizer["Uygula"]</button>
+            </form>
+            @if (giftVoucherMessage is not null)
+            {
+                <p class="mt-2 @(giftVoucherSuccess == true ? "text-success" : "text-danger")">@giftVoucherMessage</p>
+            }
+        </div>
+    </div>
+
+    <a class="btn btn-success" asp-controller="Checkout" asp-action="Index">@Localizer["Ödemeye Geç"]</a>
+}

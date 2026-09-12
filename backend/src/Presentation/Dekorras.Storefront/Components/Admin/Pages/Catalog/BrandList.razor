@@ -1,0 +1,53 @@
+﻿@page "/admin/ecommerce/brands"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Catalog.Commands
+@using Dekorras.Application.Catalog.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>Markalar</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Markalar</h4>
+    <a class="btn btn-primary" href="/admin/ecommerce/brands/new">+ Yeni Marka</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive table-card">
+            <table id="brandsTable" class="table table-nowrap align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Ad</th>
+                        <th>Slug</th>
+                        <th>Durum</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_brands is not null)
+                    {
+                        @foreach (var brand in _brands)
+                        {
+                            <tr>
+                                <td>@brand.Name</td>
+                                <td>@brand.Slug</td>
+                                <td>@(brand.IsActive ? "Aktif" : "Pasif")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+            @* Bu sayfada işlem butonu sütunu YOK (son sütun "Durum" gerçek bir veri alanı) - bkz.
+               DataTableScript.razor'daki LastColumnIsActions açıklaması. *@
+            <DataTableScript TableId="brandsTable" ReloadToken="_brands" LastColumnIsActions="false" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyCollection<BrandDto>? _brands;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _brands = await Sender.Send(new GetBrandsQuery());
+}

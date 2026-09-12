@@ -1,0 +1,85 @@
+﻿@page "/admin/cms/banners/new"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.Content.Commands
+@using Dekorras.Application.Content.Queries
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Banner</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Banner</h4>
+</div>
+
+<div class="card" style="max-width: 500px;">
+    <div class="card-body">
+        <div class="mb-2">
+            <label class="form-label">Görsel</label>
+            <InputFile OnChange="OnFileSelected" accept="image/*" class="form-control" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Bağlantı URL'si (opsiyonel)</label>
+            <input class="form-control" @bind="_linkUrl" placeholder="ör. /Category?slug=kampanyalar" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Gösterim Sırası</label>
+            <input type="number" class="form-control" @bind="_displayOrder" />
+        </div>
+
+        @if (_uploading)
+        {
+            <p class="text-muted">Yükleniyor...</p>
+        }
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+
+        <button class="btn btn-success" @onclick="CreateAsync" disabled="@(_selectedFile is null || _uploading)">Ekle</button>
+        <a class="btn btn-secondary ms-2" href="/admin/cms/banners">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _selectedFile;
+    private string _linkUrl = "";
+    private int _displayOrder;
+    private bool _uploading;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var banners = await Sender.Send(new GetBannersQuery());
+        _displayOrder = banners.Count;
+    }
+
+    private void OnFileSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e) => _selectedFile = e.File;
+
+    private async Task CreateAsync()
+    {
+        if (_selectedFile is null) return;
+
+        _uploading = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            const long maxFileSizeBytes = 10 * 1024 * 1024;
+            await using var stream = _selectedFile.OpenReadStream(maxFileSizeBytes);
+            await Sender.Send(new CreateBannerCommand(stream, _selectedFile.Name, _selectedFile.ContentType,
+                string.IsNullOrWhiteSpace(_linkUrl) ? null : _linkUrl, _displayOrder));
+
+            NavigationManager.NavigateTo("/admin/cms/banners");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+}

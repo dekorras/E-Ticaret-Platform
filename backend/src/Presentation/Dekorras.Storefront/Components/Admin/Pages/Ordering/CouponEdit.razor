@@ -1,0 +1,89 @@
+﻿@page "/admin/ecommerce/coupons/new"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Ordering.Commands
+@using Dekorras.Domain.Ordering
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Kupon</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Kupon</h4>
+</div>
+
+<div class="card" style="max-width: 500px;">
+    <div class="card-body">
+        <div class="mb-2">
+            <label class="form-label">Kod</label>
+            <input class="form-control" @bind="_code" placeholder="ör. YAZ2026" />
+        </div>
+        <div class="row">
+            <div class="col mb-2">
+                <label class="form-label">İndirim Türü</label>
+                <select class="form-select" @bind="_discountType">
+                    <option value="@DiscountType.Percentage">Yüzde (%)</option>
+                    <option value="@DiscountType.FixedAmount">Sabit Tutar (₺)</option>
+                </select>
+            </div>
+            <div class="col mb-2">
+                <label class="form-label">Değer</label>
+                <input type="number" step="0.01" class="form-control" @bind="_discountValue" />
+            </div>
+        </div>
+        <div class="row">
+            <div class="col mb-2">
+                <label class="form-label">Başlangıç</label>
+                <input type="date" class="form-control" @bind="_validFrom" />
+            </div>
+            <div class="col mb-2">
+                <label class="form-label">Bitiş</label>
+                <input type="date" class="form-control" @bind="_validTo" />
+            </div>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Kullanım Limiti (boş = sınırsız)</label>
+            <input type="number" class="form-control" @bind="_usageLimitText" />
+        </div>
+
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+
+        <button class="btn btn-success" @onclick="CreateAsync">Oluştur</button>
+        <a class="btn btn-secondary ms-2" href="/admin/ecommerce/coupons">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private string _code = "";
+    private DiscountType _discountType = DiscountType.Percentage;
+    private decimal _discountValue = 10;
+    private DateTime _validFrom = DateTime.Today;
+    private DateTime _validTo = DateTime.Today.AddMonths(1);
+    private string _usageLimitText = "";
+    private string? _errorMessage;
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            int? usageLimit = int.TryParse(_usageLimitText, out var parsed) ? parsed : null;
+
+            await Sender.Send(new CreateCouponCommand(
+                _code,
+                _discountType,
+                _discountValue,
+                DateTime.SpecifyKind(_validFrom, DateTimeKind.Utc),
+                DateTime.SpecifyKind(_validTo, DateTimeKind.Utc),
+                usageLimit));
+
+            NavigationManager.NavigateTo("/admin/ecommerce/coupons");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+}

@@ -1,0 +1,83 @@
+﻿@page "/admin/settings/contact"
+@attribute [Authorize(Policy = "SysAdminOnly")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Common
+@using Dekorras.Application.SystemAdmin.Commands
+@using Dekorras.Application.SystemAdmin.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>İletişim Ayarları</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">İletişim Ayarları</h4>
+</div>
+<p class="text-muted">
+    Storefront footer'ında gösterilecek iletişim kanalları (bkz. plan §2.1). Bir alan boş bırakılırsa
+    o kanal Storefront'ta HİÇ gösterilmez.
+</p>
+
+@if (_loaded)
+{
+    <div class="card" style="max-width: 600px;">
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Telefon Numarası</label>
+                <input class="form-control" @bind="_phoneNumber" placeholder="ör. +90 352 000 00 00" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">WhatsApp Bağlantısı</label>
+                <input class="form-control" @bind="_whatsAppUrl" placeholder="ör. https://wa.me/903520000000" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Instagram Bağlantısı</label>
+                <input class="form-control" @bind="_instagramUrl" placeholder="ör. https://instagram.com/dekorras" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Telegram Bağlantısı</label>
+                <input class="form-control" @bind="_telegramUrl" placeholder="ör. https://t.me/dekorras" />
+            </div>
+
+            @if (_savedMessage is not null)
+            {
+                <p class="text-success">@_savedMessage</p>
+            }
+
+            <button class="btn btn-success" @onclick="SaveAsync">Kaydet</button>
+        </div>
+    </div>
+}
+else
+{
+    <p>Yükleniyor...</p>
+}
+
+@code {
+    private bool _loaded;
+    private string _phoneNumber = "";
+    private string _whatsAppUrl = "";
+    private string _instagramUrl = "";
+    private string _telegramUrl = "";
+    private string? _savedMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await Sender.Send(new GetSettingsQuery(ContactSettingKeys.All));
+
+        _phoneNumber = settings.FirstOrDefault(s => s.Key == ContactSettingKeys.PhoneNumber)?.Value ?? "";
+        _whatsAppUrl = settings.FirstOrDefault(s => s.Key == ContactSettingKeys.WhatsAppUrl)?.Value ?? "";
+        _instagramUrl = settings.FirstOrDefault(s => s.Key == ContactSettingKeys.InstagramUrl)?.Value ?? "";
+        _telegramUrl = settings.FirstOrDefault(s => s.Key == ContactSettingKeys.TelegramUrl)?.Value ?? "";
+
+        _loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        await Sender.Send(new UpsertSettingCommand(ContactSettingKeys.PhoneNumber, _phoneNumber));
+        await Sender.Send(new UpsertSettingCommand(ContactSettingKeys.WhatsAppUrl, _whatsAppUrl));
+        await Sender.Send(new UpsertSettingCommand(ContactSettingKeys.InstagramUrl, _instagramUrl));
+        await Sender.Send(new UpsertSettingCommand(ContactSettingKeys.TelegramUrl, _telegramUrl));
+
+        _savedMessage = "Kaydedildi.";
+    }
+}

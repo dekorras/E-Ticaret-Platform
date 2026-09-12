@@ -1,0 +1,53 @@
+﻿@page "/admin/system/audit-log"
+@attribute [Authorize(Policy = "SysAdminOnly")]
+@rendermode InteractiveServer
+@using Dekorras.Application.SystemAdmin.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>Denetim Kaydı</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Denetim Kaydı</h4>
+</div>
+<p class="text-muted">Sistem genelindeki güvenlik-kritik işlemlerin (rol/izin/entegrasyon değişiklikleri) izi.</p>
+
+@if (_entries is null)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_entries.Count == 0)
+{
+    <p class="text-muted">Henüz bir kayıt yok.</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table id="auditLogTable" class="table table-nowrap align-middle mb-0">
+                    <thead><tr><th>Tarih</th><th>Aksiyon</th><th>Varlık</th><th>Detay</th></tr></thead>
+                    <tbody>
+                        @foreach (var entry in _entries)
+                        {
+                            <tr>
+                                @* data-order: ISO 8601 - DataTables varsayılan METİN sıralaması "dd.MM.yyyy"
+                                   formatını GÜN'e göre değil karışık sıralardı. *@
+                                <td data-order="@entry.OccurredAtUtc.ToString("o")">@entry.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</td>
+                                <td><code>@entry.Action</code></td>
+                                <td>@entry.EntityType @(entry.EntityId is not null ? $"#{entry.EntityId}" : "")</td>
+                                <td class="text-muted small">@entry.ActorIdentityUserId</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <DataTableScript TableId="auditLogTable" ReloadToken="_entries" LastColumnIsActions="false" />
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyCollection<AuditLogEntryDto>? _entries;
+
+    protected override async Task OnInitializedAsync() => _entries = await Sender.Send(new GetAuditLogQuery());
+}

@@ -1,0 +1,38 @@
+@using Dekorras.Storefront.Models
+@model ProductListingViewModel
+@{
+    if (Model.TotalPages <= 1) { return; }
+
+    string PageUrl(int page)
+    {
+        var parameters = new List<string>();
+        if (Context.Request.Query["slug"].Count > 0) parameters.Add($"slug={Uri.EscapeDataString(Context.Request.Query["slug"].ToString())}");
+        if (Context.Request.Query["q"].Count > 0) parameters.Add($"q={Uri.EscapeDataString(Context.Request.Query["q"].ToString())}");
+        if (Model.MinPriceTry is not null) parameters.Add($"minPrice={Model.MinPriceTry}");
+        if (Model.MaxPriceTry is not null) parameters.Add($"maxPrice={Model.MaxPriceTry}");
+        if (Model.BrandId is not null) parameters.Add($"brandId={Model.BrandId}");
+        parameters.Add($"sort={Model.SortBy}");
+        parameters.Add($"pageSize={Model.PageSize}");
+        parameters.Add($"page={page}");
+
+        return Context.Request.Path + "?" + string.Join('&', parameters);
+    }
+}
+
+<nav aria-label="Sayfalama" class="mt-3">
+    <ul class="pagination pagination-sm">
+        <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+            <a class="page-link" href="@PageUrl(Model.Page - 1)">Önceki</a>
+        </li>
+        @for (var pageNumber = 1; pageNumber <= Model.TotalPages; pageNumber++)
+        {
+            <li class="page-item @(pageNumber == Model.Page ? "active" : "")">
+                <a class="page-link" href="@PageUrl(pageNumber)">@pageNumber</a>
+            </li>
+        }
+        <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+            <a class="page-link" href="@PageUrl(Model.Page + 1)">Sonraki</a>
+        </li>
+    </ul>
+    <p class="text-muted small">Toplam @Model.TotalCount ürün</p>
+</nav>

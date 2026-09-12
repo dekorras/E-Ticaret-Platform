@@ -1,0 +1,116 @@
+﻿@page "/admin/accounting/reports"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>Muhasebe Raporları</PageTitle>
+
+<a class="btn btn-secondary mb-3" href="/admin/accounting">← Muhasebe Modülü</a>
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Raporlar</h4>
+</div>
+
+@if (_dashboard is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-success">
+                <div class="card-body">
+                    <h5 class="card-title text-success">Toplam Varlıklar</h5>
+                    <p class="fs-3 fw-bold">@_dashboard.TotalAssetsTry.ToString("N2") ₺</p>
+                    <p class="text-muted small mb-0">Kasa + Banka + Alacaklar</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-danger">
+                <div class="card-body">
+                    <h5 class="card-title text-danger">Toplam Borçlar</h5>
+                    <p class="fs-3 fw-bold">@_dashboard.TotalLiabilitiesTry.ToString("N2") ₺</p>
+                    <p class="text-muted small mb-0">Cari Borçlar + Bekleyen Çek/Senet</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card @(NetWorth >= 0 ? "border-success" : "border-danger")">
+                <div class="card-body">
+                    <h5 class="card-title">Net Durum</h5>
+                    <p class="fs-3 fw-bold @(NetWorth >= 0 ? "text-success" : "text-danger")">@NetWorth.ToString("N2") ₺</p>
+                    <p class="text-muted small mb-0">Varlıklar - Borçlar</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card"><div class="card-body">
+                <h6 class="card-title text-muted">Kasa Bakiyesi</h6>
+                <p class="fs-5 fw-bold">@_dashboard.TotalCashBalanceTry.ToString("N2") ₺</p>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card"><div class="card-body">
+                <h6 class="card-title text-muted">Banka Bakiyesi</h6>
+                <p class="fs-5 fw-bold">@_dashboard.TotalBankBalanceTry.ToString("N2") ₺</p>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card"><div class="card-body">
+                <h6 class="card-title text-muted">Toplam Alacak</h6>
+                <p class="fs-5 fw-bold">@_dashboard.TotalReceivableTry.ToString("N2") ₺</p>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card"><div class="card-body">
+                <h6 class="card-title text-muted">Toplam Borç</h6>
+                <p class="fs-5 fw-bold">@_dashboard.TotalPayableTry.ToString("N2") ₺</p>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card"><div class="card-body">
+                <h6 class="card-title text-muted">Bekleyen Çek/Senet</h6>
+                <p class="fs-5 fw-bold">@_dashboard.TotalPendingCheckNoteTry.ToString("N2") ₺</p>
+                <p class="text-muted small mb-0">@_dashboard.PendingCheckCount çek, @_dashboard.PendingNoteCount senet</p>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card"><div class="card-body">
+                <h6 class="card-title text-muted">Bu Ay Gider</h6>
+                <p class="fs-5 fw-bold">@_dashboard.TotalExpensesThisMonthTry.ToString("N2") ₺</p>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card"><div class="card-body">
+                <h6 class="card-title text-muted">Toplam Gider (Tüm Zamanlar)</h6>
+                <p class="fs-5 fw-bold">@_dashboard.TotalExpensesAllTimeTry.ToString("N2") ₺</p>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card"><div class="card-body">
+                <h6 class="card-title text-muted">Taslak Faturalar</h6>
+                <p class="fs-5 fw-bold">@_dashboard.TotalDraftInvoicesTry.ToString("N2") ₺</p>
+                <p class="text-muted small mb-0">Henüz kesilmemiş</p>
+            </div></div>
+        </div>
+    </div>
+
+    <p class="text-muted">Aktif cari hesap sayısı: @_dashboard.ActiveLedgerAccountCount</p>
+}
+
+@code {
+    private AccountingDashboardDto? _dashboard;
+
+    private decimal NetWorth => _dashboard is null ? 0 : _dashboard.TotalAssetsTry - _dashboard.TotalLiabilitiesTry;
+
+    protected override async Task OnInitializedAsync() =>
+        _dashboard = await Sender.Send(new GetAccountingDashboardQuery());
+}

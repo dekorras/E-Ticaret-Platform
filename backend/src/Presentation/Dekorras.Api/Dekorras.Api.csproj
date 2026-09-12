@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.25" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="[6.9.0]" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Dekorras.Application\Dekorras.Application.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\Dekorras.Persistence\Dekorras.Persistence.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\Dekorras.Infrastructure\Dekorras.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

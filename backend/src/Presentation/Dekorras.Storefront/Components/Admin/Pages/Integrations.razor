@@ -1,0 +1,234 @@
+﻿@page "/admin/integrations"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.Common.Interfaces
+@using Dekorras.Application.Integrations.Commands
+@using Dekorras.Application.Integrations.Dtos
+@using Dekorras.Application.Integrations.Queries
+@using Dekorras.Domain.Integrations
+@inject MediatR.ISender Sender
+
+<PageTitle>Entegrasyonlar</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Entegrasyonlar</h4>
+</div>
+<p class="text-muted">
+    Aşağıdaki sağlayıcıların TÜMÜ kod tarafında yazılmış ve registry'e kayıtlıdır; hiçbiri
+    varsayılan olarak aktif değildir. Bir karta tıklayıp gerekli bilgileri girip kaydettiğinizde
+    bağlantı test edilir ve başarılıysa sağlayıcı o andan itibaren ilgili akışlarda (checkout,
+    kargo hesaplama, pazaryeri senkronu, fatura kesme) kullanılabilir hale gelir (bkz. plan §4.1).
+</p>
+
+<ul class="nav nav-tabs mb-3">
+    @foreach (var category in Enum.GetValues<ProviderCategory>())
+    {
+        <li class="nav-item">
+            <a class="nav-link @(category == _selectedCategory ? "active" : "")" href="#" @onclick="() => SelectCategory(category)" @onclick:preventDefault>
+                @CategoryLabel(category)
+            </a>
+        </li>
+    }
+</ul>
+
+@if (_providers is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var provider in _providers)
+        {
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">@provider.DisplayName</h5>
+                        <span class="badge @StatusBadgeClass(provider.Status)">@StatusLabel(provider.Status)</span>
+                        @if (provider.IsDefaultForCategory)
+                        {
+                            <span class="badge bg-primary-subtle text-primary">Varsayılan</span>
+                        }
+                        @if (provider.LastHealthCheckAtUtc is not null)
+                        {
+                            <p class="small text-muted mt-2 mb-0">
+                                Son kontrol: @provider.LastHealthCheckAtUtc.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                            </p>
+                        }
+                        @if (provider.LastHealthCheckMessage is not null)
+                        {
+                            <p class="small text-muted">@provider.LastHealthCheckMessage</p>
+                        }
+                        <button class="btn btn-outline-primary btn-sm mt-2" @onclick="() => OpenConfigForm(provider)">
+                            Yapılandır
+                        </button>
+                        @if (provider.Id.HasValue)
+                        {
+                            <button class="btn btn-outline-secondary btn-sm mt-2 ms-1" @onclick="() => RetestConnectionAsync(provider.Id.Value)">
+                                Yeniden Test Et
+                            </button>
+                            <button class="btn btn-link btn-sm mt-2" @onclick="() => ToggleHistoryAsync(provider.Id.Value)">
+                                Geçmiş
+                            </button>
+                            @if (provider.Status == ProviderStatus.Active && !provider.IsDefaultForCategory)
+                            {
+                                <button class="btn btn-outline-primary btn-sm mt-2 ms-1" @onclick="() => SetDefaultAsync(provider.Id.Value)">
+                                    Varsayılan Yap
+                                </button>
+                            }
+                        }
+                        @if (_historyProviderId == provider.Id && _history is not null)
+                        {
+                            @if (_history.Count == 0)
+                            {
+                                <p class="small text-muted mt-2">Henüz bir bağlantı testi kaydı yok.</p>
+                            }
+                            else
+                            {
+                                <ul class="list-unstyled small mt-2 mb-0">
+                                    @foreach (var entry in _history)
+                                    {
+                                        <li class="@(entry.Success ? "text-success" : "text-danger")">
+                                            @entry.CheckedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm") -
+                                            @(entry.Success ? "Başarılı" : "Başarısız")
+                                            @if (entry.Message is not null) { <text> (@entry.Message)</text> }
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (_editingProvider is not null)
+{
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5 class="card-title">@_editingProvider.DisplayName - Yapılandırma</h5>
+            @foreach (var field in _editingProvider.ConfigFields)
+            {
+                <div class="mb-2">
+                    <label class="form-label">@field.Label @(field.IsRequired ? "*" : "")</label>
+                    <input type="@(field.Type == ConfigFieldType.Password ? "password" : "text")"
+                           class="form-control"
+                           value="@_formValues.GetValueOrDefault(field.Key)"
+                           @oninput="e => _formValues[field.Key] = e.Value?.ToString() ?? string.Empty" />
+                </div>
+            }
+            <button class="btn btn-success" @onclick="SaveConfiguration">Kaydet ve Bağlantıyı Test Et</button>
+            <button class="btn btn-secondary ms-2" @onclick="() => _editingProvider = null">Vazgeç</button>
+
+            @if (_resultMessage is not null)
+            {
+                <p class="mt-3 @(_resultSuccess ? "text-success" : "text-danger")">@_resultMessage</p>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private ProviderCategory _selectedCategory = ProviderCategory.Payment;
+    private IReadOnlyCollection<IntegrationProviderDto>? _providers;
+    private IntegrationProviderDto? _editingProvider;
+    private readonly Dictionary<string, string> _formValues = [];
+    private string? _resultMessage;
+    private bool _resultSuccess;
+    private Guid? _historyProviderId;
+    private IReadOnlyCollection<Dekorras.Application.Integrations.Queries.IntegrationHealthCheckLogDto>? _history;
+
+    protected override Task OnInitializedAsync() => LoadProvidersAsync();
+
+    private async Task SelectCategory(ProviderCategory category)
+    {
+        _selectedCategory = category;
+        _editingProvider = null;
+        await LoadProvidersAsync();
+    }
+
+    private async Task LoadProvidersAsync()
+    {
+        _providers = await Sender.Send(new GetIntegrationProvidersQuery(_selectedCategory));
+    }
+
+    private void OpenConfigForm(IntegrationProviderDto provider)
+    {
+        _editingProvider = provider;
+        _formValues.Clear();
+        _resultMessage = null;
+    }
+
+    private async Task SaveConfiguration()
+    {
+        if (_editingProvider is null) return;
+
+        var result = await Sender.Send(new ConfigureIntegrationProviderCommand(
+            _editingProvider.ProviderKey, _selectedCategory, _formValues, ActingIdentityUserId: null));
+
+        _resultSuccess = result.Success;
+        _resultMessage = result.Message;
+
+        await LoadProvidersAsync();
+    }
+
+    private async Task RetestConnectionAsync(Guid providerId)
+    {
+        var result = await Sender.Send(new TestIntegrationProviderConnectionCommand(providerId));
+        _resultSuccess = result.Success;
+        _resultMessage = result.Message;
+        await LoadProvidersAsync();
+
+        if (_historyProviderId == providerId)
+            await LoadHistoryAsync(providerId);
+    }
+
+    private async Task ToggleHistoryAsync(Guid providerId)
+    {
+        if (_historyProviderId == providerId)
+        {
+            _historyProviderId = null;
+            _history = null;
+            return;
+        }
+
+        await LoadHistoryAsync(providerId);
+    }
+
+    private async Task LoadHistoryAsync(Guid providerId)
+    {
+        _historyProviderId = providerId;
+        _history = await Sender.Send(new Dekorras.Application.Integrations.Queries.GetIntegrationHealthCheckLogsQuery(providerId));
+    }
+
+    private async Task SetDefaultAsync(Guid providerId)
+    {
+        await Sender.Send(new SetIntegrationProviderDefaultCommand(providerId));
+        await LoadProvidersAsync();
+    }
+
+    private static string CategoryLabel(ProviderCategory category) => category switch
+    {
+        ProviderCategory.Payment => "Ödeme",
+        ProviderCategory.Cargo => "Kargo",
+        ProviderCategory.Marketplace => "Pazaryeri",
+        ProviderCategory.EInvoice => "e-Fatura",
+        _ => category.ToString()
+    };
+
+    private static string StatusLabel(ProviderStatus status) => status switch
+    {
+        ProviderStatus.Active => "Aktif",
+        ProviderStatus.Error => "Hata",
+        _ => "Yapılandırılmadı"
+    };
+
+    private static string StatusBadgeClass(ProviderStatus status) => status switch
+    {
+        ProviderStatus.Active => "bg-success-subtle text-success",
+        ProviderStatus.Error => "bg-danger-subtle text-danger",
+        _ => "bg-secondary-subtle text-secondary"
+    };
+}

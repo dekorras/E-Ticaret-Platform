@@ -1,0 +1,96 @@
+﻿@page "/admin/ecommerce/campaigns/new"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Ordering.Commands
+@using Dekorras.Domain.Ordering
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>Yeni Kampanya</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Yeni Kampanya</h4>
+</div>
+
+<div class="card" style="max-width: 500px;">
+    <div class="card-body">
+        <div class="mb-2">
+            <label class="form-label">Ad</label>
+            <input class="form-control" @bind="_name" placeholder="ör. Yaz İndirimi" />
+        </div>
+        <div class="row">
+            <div class="col mb-2">
+                <label class="form-label">İndirim Türü</label>
+                <select class="form-select" @bind="_discountType">
+                    <option value="@DiscountType.Percentage">Yüzde (%)</option>
+                    <option value="@DiscountType.FixedAmount">Sabit Tutar (₺)</option>
+                </select>
+            </div>
+            <div class="col mb-2">
+                <label class="form-label">Değer</label>
+                <input type="number" step="0.01" class="form-control" @bind="_discountValue" />
+            </div>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Min. Sepet Tutarı (boş = koşulsuz)</label>
+            <input type="number" step="0.01" class="form-control" @bind="_minCartTotalText" />
+        </div>
+        <div class="row">
+            <div class="col mb-2">
+                <label class="form-label">Başlangıç</label>
+                <input type="date" class="form-control" @bind="_startsAt" />
+            </div>
+            <div class="col mb-2">
+                <label class="form-label">Bitiş</label>
+                <input type="date" class="form-control" @bind="_endsAt" />
+            </div>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Kullanım Limiti (boş = sınırsız)</label>
+            <input type="number" class="form-control" @bind="_usageLimitText" />
+        </div>
+
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+
+        <button class="btn btn-success" @onclick="CreateAsync">Oluştur</button>
+        <a class="btn btn-secondary ms-2" href="/admin/ecommerce/campaigns">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    private string _name = "";
+    private DiscountType _discountType = DiscountType.Percentage;
+    private decimal _discountValue = 10;
+    private string _minCartTotalText = "";
+    private DateTime _startsAt = DateTime.Today;
+    private DateTime _endsAt = DateTime.Today.AddMonths(1);
+    private string _usageLimitText = "";
+    private string? _errorMessage;
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            int? usageLimit = int.TryParse(_usageLimitText, out var parsedLimit) ? parsedLimit : null;
+            decimal? minCartTotal = decimal.TryParse(_minCartTotalText, System.Globalization.CultureInfo.InvariantCulture, out var parsedMin) ? parsedMin : null;
+
+            await Sender.Send(new CreateCampaignCommand(
+                _name,
+                DateTime.SpecifyKind(_startsAt, DateTimeKind.Utc),
+                DateTime.SpecifyKind(_endsAt, DateTimeKind.Utc),
+                _discountType,
+                _discountValue,
+                usageLimit,
+                minCartTotal));
+
+            NavigationManager.NavigateTo("/admin/ecommerce/campaigns");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+}

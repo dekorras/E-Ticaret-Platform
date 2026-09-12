@@ -1,0 +1,75 @@
+@using Dekorras.Application.Customers.Queries
+@model IReadOnlyCollection<WishlistItemDto>
+@{
+    ViewData["Title"] = "Favorilerim";
+    var newsletterSubscribed = ViewBag.NewsletterSubscribed as bool? ?? false;
+}
+
+<h1 class="h3 mb-3">Favorilerim</h1>
+
+<div class="card mb-4" style="max-width: 500px;">
+    <div class="card-body">
+        <h5 class="card-title">Bülten Aboneliği</h5>
+        <form asp-controller="Account" asp-action="SetNewsletterSubscription" method="post" class="d-flex align-items-center gap-2">
+            <input type="hidden" name="subscribed" value="@(!newsletterSubscribed)" />
+            @if (newsletterSubscribed)
+            {
+                <span class="badge bg-success">Abonesiniz</span>
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Abonelikten Çık</button>
+            }
+            else
+            {
+                <span class="badge bg-secondary">Abone Değilsiniz</span>
+                <button type="submit" class="btn btn-sm btn-outline-primary">Bültene Abone Ol</button>
+            }
+        </form>
+    </div>
+</div>
+
+@if (Model.Count == 0)
+{
+    <p class="text-muted">Favori listeniz boş.</p>
+    <a class="btn btn-primary" asp-controller="Home" asp-action="Index">Alışverişe Devam Et</a>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-md-4 g-4">
+        @foreach (var item in Model)
+        {
+            <div class="col">
+                <div class="card h-100">
+                    <a asp-controller="Product" asp-action="Details" asp-route-slug="@item.Slug">
+                        @if (item.ImageUrl is not null)
+                        {
+                            <img src="@item.ImageUrl" class="card-img-top" style="height: 200px; object-fit: cover;" alt="@item.Name" />
+                        }
+                        else
+                        {
+                            <div class="d-flex align-items-center justify-content-center bg-light text-muted" style="height: 200px;">Görsel Yok</div>
+                        }
+                    </a>
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <a class="text-decoration-none" asp-controller="Product" asp-action="Details" asp-route-slug="@item.Slug">@item.Name</a>
+                        </h5>
+                        <p class="card-text fw-bold">@Html.Money(item.PriceTry)</p>
+                        <p class="card-text">
+                            @if (item.InStock)
+                            {
+                                <span class="badge bg-success">Stokta Var</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Stokta Yok</span>
+                            }
+                        </p>
+                        <form asp-controller="Account" asp-action="RemoveFromWishlist" method="post">
+                            <input type="hidden" name="productId" value="@item.ProductId" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Favorilerden Çıkar</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

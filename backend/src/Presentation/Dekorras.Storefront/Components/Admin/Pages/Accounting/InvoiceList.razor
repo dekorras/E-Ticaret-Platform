@@ -1,0 +1,88 @@
+﻿@page "/admin/accounting/invoices"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Queries
+@using Dekorras.Domain.Accounting
+@inject MediatR.ISender Sender
+
+<PageTitle>Faturalar</PageTitle>
+
+<a class="btn btn-secondary mb-3" href="/admin/accounting">← Muhasebe Modülü</a>
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Faturalar</h4>
+</div>
+<p class="text-muted">
+    Bir sipariş "Tamamlandı" durumuna geçtiğinde burada otomatik olarak bir taslak fatura oluşur
+    (cari hesap bulunamazsa otomatik olarak yaratılır).
+</p>
+
+<div class="mb-3" style="max-width: 300px;">
+    <select class="form-select" @bind="_statusFilterText" @bind:after="LoadAsync">
+        <option value="">Tüm Durumlar</option>
+        @foreach (var status in Enum.GetValues<InvoiceStatus>())
+        {
+            <option value="@status">@StatusLabel(status)</option>
+        }
+    </select>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive table-card">
+            <table id="invoicesTable" class="table table-nowrap align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Fatura No</th>
+                        <th>Cari Hesap</th>
+                        <th>Sipariş No</th>
+                        <th>Tarih</th>
+                        <th>Tutar</th>
+                        <th>Durum</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_invoices is not null)
+                    {
+                        @foreach (var invoice in _invoices)
+                        {
+                            <tr>
+                                <td><a href="/admin/accounting/invoices/@invoice.Id">@invoice.InvoiceNumber</a></td>
+                                <td>@invoice.LedgerAccountName</td>
+                                <td>@invoice.OrderNumber</td>
+                                <td data-order="@invoice.CreatedAtUtc.ToString("o")">@invoice.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                                <td data-order="@invoice.GrandTotalTry.ToString(System.Globalization.CultureInfo.InvariantCulture)">@invoice.GrandTotalTry.ToString("N2") ₺</td>
+                                <td><span class="badge bg-secondary-subtle text-secondary">@StatusLabel(invoice.Status)</span></td>
+                                <td><a class="btn btn-sm btn-outline-primary" href="/admin/accounting/invoices/@invoice.Id">Detay</a></td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+            <DataTableScript TableId="invoicesTable" ReloadToken="_invoices" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _statusFilterText = "";
+    private IReadOnlyCollection<InvoiceListItemDto>? _invoices;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        InvoiceStatus? filter = Enum.TryParse<InvoiceStatus>(_statusFilterText, out var parsed) ? parsed : null;
+        _invoices = await Sender.Send(new GetInvoicesQuery(filter));
+    }
+
+    public static string StatusLabel(InvoiceStatus status) => status switch
+    {
+        InvoiceStatus.Draft => "Taslak",
+        InvoiceStatus.Waybilled => "İrsaliyeleşmiş",
+        InvoiceStatus.Invoiced => "Faturalaşmış",
+        InvoiceStatus.EInvoiceIssued => "Faturalaşmış (E-Fatura)",
+        InvoiceStatus.EArchiveIssued => "Faturalaşmış (E-Arşiv)",
+        _ => status.ToString()
+    };
+}

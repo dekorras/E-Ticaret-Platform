@@ -1,0 +1,104 @@
+﻿@page "/admin/cms/blog/new"
+@page "/admin/cms/blog/{Id:guid}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.Common
+@using Dekorras.Application.Content.Commands
+@using Dekorras.Application.Content.Queries
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsNew ? "Yeni Yazı" : "Yazıyı Düzenle")</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">@(IsNew ? "Yeni Yazı" : "Yazıyı Düzenle")</h4>
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 700px;">
+        @if (IsNew)
+        {
+            <div class="row">
+                <div class="col mb-2">
+                    <label class="form-label">Slug (URL)</label>
+                    <input class="form-control" @bind="_slug" placeholder="ör. kartonpiyer-secim-rehberi" />
+                </div>
+                <div class="col mb-2">
+                    <label class="form-label">Dil</label>
+                    <select class="form-select" @bind="_languageCode">
+                        @foreach (var language in SupportedLanguages.All)
+                        {
+                            <option value="@language.Code">@language.DisplayName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        }
+        <div class="mb-2">
+            <label class="form-label">Başlık</label>
+            <input class="form-control" @bind="_title" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">İçerik (HTML)</label>
+            <textarea class="form-control" rows="10" @bind="_contentHtml"></textarea>
+        </div>
+
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+
+        <button class="btn btn-success" @onclick="SaveAsync">Kaydet</button>
+        <a class="btn btn-secondary ms-2" href="/admin/cms/blog">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+
+    private string _slug = "";
+    private string _languageCode = "tr";
+    private string _title = "";
+    private string _contentHtml = "";
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id is Guid id)
+        {
+            var detail = await Sender.Send(new GetBlogPostByIdQuery(id));
+            if (detail is null) return;
+
+            _slug = detail.Slug;
+            _languageCode = detail.LanguageCode;
+            _title = detail.Title;
+            _contentHtml = detail.ContentHtml;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (IsNew)
+            {
+                await Sender.Send(new CreateBlogPostCommand(_slug, _languageCode, _title, _contentHtml));
+            }
+            else
+            {
+                await Sender.Send(new UpdateBlogPostCommand(Id!.Value, _title, _contentHtml));
+            }
+
+            NavigationManager.NavigateTo("/admin/cms/blog");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FluentValidation.ValidationException)
+        {
+            _errorMessage = ex is FluentValidation.ValidationException vex
+                ? string.Join(" ", vex.Errors.Select(e => e.ErrorMessage))
+                : ex.Message;
+        }
+    }
+}

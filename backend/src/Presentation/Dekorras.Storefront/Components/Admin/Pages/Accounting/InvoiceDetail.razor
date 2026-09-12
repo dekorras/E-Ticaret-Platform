@@ -1,0 +1,226 @@
+﻿@page "/admin/accounting/invoices/{Id:guid}"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@using Dekorras.Application.Accounting.Queries
+@using Dekorras.Application.Integrations.Dtos
+@using Dekorras.Application.Integrations.Queries
+@using Dekorras.Domain.Accounting
+@using Dekorras.Domain.Integrations
+@inject MediatR.ISender Sender
+
+<PageTitle>Fatura: @_invoice?.InvoiceNumber</PageTitle>
+
+@if (_invoice is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <a class="btn btn-secondary mb-3" href="/admin/accounting/invoices">← Fatura Listesi</a>
+    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+        <h4 class="mb-sm-0">@_invoice.InvoiceNumber</h4>
+    </div>
+    <p>
+        <a href="/admin/accounting/ledger-accounts/@_invoice.LedgerAccountId">@_invoice.LedgerAccountName</a>
+        @if (_invoice.OrderNumber is not null) { <text> · Sipariş: @_invoice.OrderNumber</text> }
+        <span class="badge bg-secondary-subtle text-secondary ms-1">@InvoiceList.StatusLabel(_invoice.Status)</span>
+        @if (_invoice.IsExportInvoice)
+        {
+            <span class="badge bg-info-subtle text-info ms-1">İhracat (KDV %0)</span>
+        }
+    </p>
+    <p class="text-muted">
+        Oluşturma: @_invoice.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+        @if (_invoice.IssuedAtUtc is DateTime issuedAt) { <text> · Kesim: @issuedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</text> }
+        @if (_invoice.WaybillNumber is not null) { <text> · İrsaliye No: @_invoice.WaybillNumber</text> }
+    </p>
+
+    @if (_invoice.Status == InvoiceStatus.Draft)
+    {
+        <button class="btn btn-outline-primary btn-sm mb-3" @onclick="MarkAsWaybilledAsync">İrsaliyeleştir</button>
+    }
+
+    @if (_invoice.Status is InvoiceStatus.Draft or InvoiceStatus.Waybilled)
+    {
+        <div class="card mb-3" style="max-width: 800px;">
+            <div class="card-body">
+                <h5 class="card-title">e-Fatura / e-Arşiv Olarak Kes</h5>
+                <p class="text-muted small">
+                    Resmi kesim, GİB sertifikalı bir entegratör (BizimHesap/Nilvera/Uyumsoft/Foriba/İzibiz)
+                    üzerinden yapılır - bu ekran YALNIZCA sonucu (resmi fatura no + kullanılan sağlayıcı)
+                    kaydeder. Aşağıda "Aktif" olan bir e-Fatura sağlayıcısı seçilmelidir
+                    (<a href="/admin/integrations">Entegrasyonlar</a> ekranından yapılandırılabilir).
+                </p>
+                @if (_activeEInvoiceProviders is { Count: 0 })
+                {
+                    <p class="text-warning">Aktif bir e-Fatura sağlayıcısı yok - önce Entegrasyonlar ekranından birini yapılandırın.</p>
+                }
+                else
+                {
+                    <div class="row g-2">
+                        <div class="col">
+                            <select class="form-select form-select-sm" @bind="_selectedProviderId">
+                                <option value="">Sağlayıcı Seçin</option>
+                                @if (_activeEInvoiceProviders is not null)
+                                {
+                                    @foreach (var provider in _activeEInvoiceProviders)
+                                    {
+                                        <option value="@provider.Id">@provider.DisplayName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col">
+                            <input class="form-control form-control-sm" placeholder="Resmi Fatura No" @bind="_officialInvoiceNumber" />
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="IssueAsEInvoiceAsync">e-Fatura Olarak Kes</button>
+                            <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="IssueAsEArchiveAsync">e-Arşiv Olarak Kes</button>
+                        </div>
+                    </div>
+                }
+                @if (_issueError is not null)
+                {
+                    <p class="text-danger mt-2">@_issueError</p>
+                }
+            </div>
+        </div>
+    }
+
+    <div class="card" style="max-width: 800px;">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table class="table table-nowrap align-middle mb-0">
+                    <thead><tr><th>Açıklama</th><th>Adet</th><th>Birim Fiyat</th><th>KDV %</th><th>Tutar</th></tr></thead>
+                    <tbody>
+                        @foreach (var line in _invoice.Lines)
+                        {
+                            <tr>
+                                <td>@line.Description</td>
+                                <td>@line.Quantity</td>
+                                <td>@line.UnitPriceTry.ToString("N2") ₺</td>
+                                <td>%@line.TaxRatePercentage.ToString("0")</td>
+                                <td>@line.LineTotalTry.ToString("N2") ₺</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="max-width: 800px;">
+        <div class="card-body">
+            <div class="table-responsive table-card">
+                <table class="table table-nowrap align-middle mb-0 w-auto">
+                    <tbody>
+                        <tr><td>Ara Toplam</td><td class="text-end">@_invoice.SubTotalTry.ToString("N2") ₺</td></tr>
+                        <tr><td>KDV</td><td class="text-end">@_invoice.TaxTotalTry.ToString("N2") ₺</td></tr>
+                        <tr class="fw-bold"><td>Genel Toplam</td><td class="text-end">@_invoice.GrandTotalTry.ToString("N2") ₺</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    @if (_invoice.EInvoiceLogs.Count > 0)
+    {
+        <h5 class="mt-3">Gönderim Geçmişi</h5>
+        <div class="card" style="max-width: 700px;">
+            <div class="card-body">
+                <div class="table-responsive table-card">
+                    <table class="table table-nowrap align-middle mb-0">
+                        <thead><tr><th>Tarih</th><th>Sağlayıcı</th><th>Resmi No</th><th>Durum</th></tr></thead>
+                        <tbody>
+                            @foreach (var log in _invoice.EInvoiceLogs)
+                            {
+                                <tr>
+                                    <td>@log.SentAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td>@log.ProviderName</td>
+                                    <td>@log.GibDocumentNumber</td>
+                                    <td><span class="badge @(log.Success ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger")">@(log.Success ? "Başarılı" : "Başarısız")</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private InvoiceDetailDto? _invoice;
+    private IReadOnlyCollection<IntegrationProviderDto>? _activeEInvoiceProviders;
+
+    private string _selectedProviderId = "";
+    private string _officialInvoiceNumber = "";
+    private string? _issueError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        var allEInvoiceProviders = await Sender.Send(new GetIntegrationProvidersQuery(ProviderCategory.EInvoice));
+        _activeEInvoiceProviders = allEInvoiceProviders.Where(p => p.Status == ProviderStatus.Active && p.Id.HasValue).ToList();
+    }
+
+    private async Task LoadAsync() => _invoice = await Sender.Send(new GetInvoiceDetailQuery(Id));
+
+    private async Task MarkAsWaybilledAsync()
+    {
+        await Sender.Send(new MarkInvoiceAsWaybilledCommand(Id));
+        await LoadAsync();
+    }
+
+    private async Task IssueAsEInvoiceAsync()
+    {
+        if (!ValidateIssueInputs(out var providerId)) return;
+
+        try
+        {
+            await Sender.Send(new IssueInvoiceAsEInvoiceCommand(Id, providerId, _officialInvoiceNumber));
+            _officialInvoiceNumber = "";
+            await LoadAsync();
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _issueError = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+
+    private async Task IssueAsEArchiveAsync()
+    {
+        if (!ValidateIssueInputs(out var providerId)) return;
+
+        try
+        {
+            await Sender.Send(new IssueInvoiceAsEArchiveCommand(Id, providerId, _officialInvoiceNumber));
+            _officialInvoiceNumber = "";
+            await LoadAsync();
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            _issueError = string.Join(" ", ex.Errors.Select(e => e.ErrorMessage));
+        }
+    }
+
+    private bool ValidateIssueInputs(out Guid providerId)
+    {
+        _issueError = null;
+        if (!Guid.TryParse(_selectedProviderId, out providerId))
+        {
+            _issueError = "Bir e-Fatura sağlayıcısı seçin.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(_officialInvoiceNumber))
+        {
+            _issueError = "Resmi fatura numarasını girin.";
+            return false;
+        }
+        return true;
+    }
+}

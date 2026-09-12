@@ -1,0 +1,99 @@
+@page "/admin/cms/banner-zones/new"
+@page "/admin/cms/banner-zones/{Id:guid}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Dekorras.Application.Content.Commands
+@using Dekorras.Application.Content.Queries
+@inject MediatR.ISender Sender
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(IsNew ? "Yeni Banner Bölgesi" : "Banner Bölgesini Düzenle")</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">@(IsNew ? "Yeni Banner Bölgesi" : "Banner Bölgesini Düzenle")</h4>
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 600px;">
+        <div class="mb-2">
+            <label class="form-label">Anahtar (Key)</label>
+            <input class="form-control" @bind="_key" disabled="@(!IsNew)" placeholder="ör. home-main" />
+            <div class="form-text">Yalnızca küçük harf, rakam ve tire içerebilir. Oluşturulduktan sonra değiştirilemez - kodun içinde bölgeyi bu anahtarla bulur.</div>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Ad</label>
+            <input class="form-control" @bind="_name" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Açıklama</label>
+            <textarea class="form-control" @bind="_description"></textarea>
+        </div>
+
+        @if (!IsNew)
+        {
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" role="switch" id="zoneActiveSwitch" @bind="_isActive" />
+                <label class="form-check-label" for="zoneActiveSwitch">Aktif</label>
+            </div>
+        }
+
+        @if (_errorMessage is not null)
+        {
+            <p class="text-danger">@_errorMessage</p>
+        }
+
+        <button class="btn btn-success" @onclick="SaveAsync">Kaydet</button>
+        <a class="btn btn-secondary ms-2" href="/admin/cms/banner-zones">Vazgeç</a>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+
+    private string _key = "";
+    private string _name = "";
+    private string? _description;
+    private bool _isActive = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id is Guid id)
+        {
+            var zone = await Sender.Send(new GetBannerZoneByIdQuery(id));
+            if (zone is null) return;
+
+            _key = zone.Key;
+            _name = zone.Name;
+            _description = zone.Description;
+            _isActive = zone.IsActive;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            if (IsNew)
+            {
+                await Sender.Send(new CreateBannerZoneCommand(_key, _name, _description));
+            }
+            else
+            {
+                await Sender.Send(new UpdateBannerZoneCommand(Id!.Value, _name, _description));
+                await Sender.Send(new SetBannerZoneActiveCommand(Id!.Value, _isActive));
+            }
+
+            NavigationManager.NavigateTo("/admin/cms/banner-zones");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FluentValidation.ValidationException)
+        {
+            _errorMessage = ex is FluentValidation.ValidationException vex
+                ? string.Join(" ", vex.Errors.Select(e => e.ErrorMessage))
+                : ex.Message;
+        }
+    }
+}

@@ -1,0 +1,57 @@
+@* Görünmez yardımcı bileşen - 18 liste sayfasındaki TEKRAR EDEN "IJSRuntime enjekte et,
+   OnAfterRenderAsync'te dekorrasDataTable.init çağır, JSException'ı yut" kalıbını TEK yerde
+   toplar. Kullanım: <DataTableScript TableId="brandsTable" ReloadToken="_brands" /> - tablo
+   etiketinin hemen ardına eklenir. ReloadToken olarak sayfanın kendi liste alanı (ör. "_brands")
+   verilir; her LoadAsync() çağrısı MediatR'dan YENİ bir liste referansı döndürdüğü için referans
+   değişimi doğal bir "yeniden yüklendi" sinyali olarak kullanılabiliyor - ekstra bir versiyon
+   sayacı GEREKMİYOR. *@
+@inject IJSRuntime JS
+
+@code {
+    [Parameter, EditorRequired]
+    public string TableId { get; set; } = default!;
+
+    [Parameter]
+    public object? ReloadToken { get; set; }
+
+    /// <summary>Tablonun SON sütunu Düzenle/Sil gibi işlem butonları mı taşıyor (sıralama/arama
+    /// devre dışı bırakılsın) - sayfaların ÇOĞUNDA true, ama HEPSİNDE değil (ör. BrandList'in son
+    /// sütunu gerçek bir "Durum" veri alanı) - bu yüzden varsayılan true, sayfa override edebilir.</summary>
+    [Parameter]
+    public bool LastColumnIsActions { get; set; } = true;
+
+    /// <summary>DataTables'ın kendi varsayılan "ilk sütuna göre alfabetik sırala" davranışını
+    /// devre dışı bırakır - sunucunun render ettiği satır sırası (ör. CategoryList'in üst-alt
+    /// hiyerarşi sırası) İLK açılışta AYNEN korunur. Çoğu düz liste için gerekmez (varsayılan
+    /// false) - yalnızca sunucu tarafında ANLAMLI bir sıra kurulmuş sayfalarda true geçilir.</summary>
+    [Parameter]
+    public bool PreserveServerOrder { get; set; }
+
+    private object? _lastToken;
+    private bool _pendingInit = true;
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_lastToken, ReloadToken))
+        {
+            _lastToken = ReloadToken;
+            _pendingInit = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_pendingInit || ReloadToken is null) return;
+        _pendingInit = false;
+
+        try
+        {
+            await JS.InvokeVoidAsync("dekorrasDataTable.init", TableId, LastColumnIsActions, PreserveServerOrder);
+        }
+        catch (JSException)
+        {
+            // Sessizce yutulur - bkz. BannerZoneBuilder'daki aynı savunma deseni (backend/README.md):
+            // script gecikse/eksik kalsa bile yalnızca BU tablo etkilenir, circuit ASLA düşmez.
+        }
+    }
+}

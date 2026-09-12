@@ -1,0 +1,28 @@
+/* Dekorras marka token'ları - bkz. plan (dekorras.com/Journal3 tasarım paritesi).
+   Renk değerleri dekorras.com'un canlı sitesinden çıkarılan gerçek CSS değerleridir. */
+:root {
+    --dk-color-primary: #E96631;
+    --dk-color-primary-dark: #DD4B0F;
+    --dk-color-primary-rgb: 233, 102, 49;
+    --dk-color-text: #333333;
+    --dk-color-muted: #767676;
+    --dk-color-border: #e5e5e5;
+    --dk-color-bg: #ffffff;
+    --dk-color-bg-alt: #f7f7f7;
+
+    --dk-font-heading: 'Montserrat', sans-serif;
+    --dk-font-body: 'Lato', sans-serif;
+
+    --dk-header-height: 90px;
+    --dk-header-height-compact: 50px;
+    --dk-topbar-height: 35px;
+
+    --dk-radius: 4px;
+    --dk-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.08);
+    --dk-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+    --dk-transition: 0.25s ease;
+
+    --dk-z-header: 1030;
+    --dk-z-mega: 1035;
+    --dk-z-quickview: 1056;
+}

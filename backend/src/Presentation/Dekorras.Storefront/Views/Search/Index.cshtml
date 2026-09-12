@@ -1,0 +1,51 @@
+@using Dekorras.Storefront.Models
+@model ProductListingViewModel
+@{
+    ViewData["Title"] = string.IsNullOrWhiteSpace(Model.SearchText) ? "Arama" : $"\"{Model.SearchText}\" için arama sonuçları";
+    ViewData["InfiniteScrollController"] = "Search";
+    // Kategori sayfasıyla AYNI varsayılan (bkz. Views/Category/Index.cshtml) - kullanıcı isteği.
+    ViewData["ProductGridDefaultCols"] = 3;
+}
+
+@section Scripts {
+    <script src="~/js/infinite-scroll.js" asp-append-version="true"></script>
+    <script src="~/js/product-view.js" asp-append-version="true"></script>
+}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">@Localizer["Anasayfa"]</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Arama</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-3">
+    @if (string.IsNullOrWhiteSpace(Model.SearchText))
+    {
+        <text>Arama</text>
+    }
+    else
+    {
+        <text>"@Model.SearchText" için @Model.TotalCount sonuç</text>
+    }
+</h1>
+
+@if (string.IsNullOrWhiteSpace(Model.SearchText))
+{
+    @await Html.PartialAsync("_ProductFilters", Model)
+    <p class="text-muted">Aramak istediğiniz ürünü yukarıdaki kutuya yazın.</p>
+}
+else
+{
+    <div data-dk-product-listing>
+        @await Html.PartialAsync("_ProductToolbar", Model)
+        <div class="row g-4">
+            <div class="col-lg-3">
+                @await Html.PartialAsync("_ProductFilters", Model)
+            </div>
+            <div class="col-lg-9">
+                @await Html.PartialAsync("_InfiniteScroll", Model)
+            </div>
+        </div>
+    </div>
+}

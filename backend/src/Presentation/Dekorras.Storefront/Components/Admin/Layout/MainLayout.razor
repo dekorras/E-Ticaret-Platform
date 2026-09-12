@@ -1,0 +1,128 @@
+﻿@inherits LayoutComponentBase
+
+<div id="layout-wrapper">
+    <header id="page-topbar">
+        <div class="layout-width">
+            <div class="navbar-header">
+                <div class="d-flex">
+                    <div class="navbar-brand-box horizontal-logo">
+                        <a href="/admin" class="logo logo-dark">
+                            <span class="logo-sm fs-22 fw-bold text-body">D</span>
+                            <span class="logo-lg fs-22 fw-bold text-body">Dekorras</span>
+                        </a>
+                    </div>
+
+                    <button type="button" class="btn btn-sm px-3 fs-16 header-item vertical-menu-btn topnav-hamburger material-shadow-none" id="topnav-hamburger-icon">
+                        <span class="hamburger-icon">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </span>
+                    </button>
+                </div>
+
+                <div class="d-flex align-items-center">
+                    <AuthorizeView>
+                        <Authorized Context="authState">
+                            <div class="dropdown ms-sm-3 header-item topbar-user">
+                                <button type="button" class="btn material-shadow-none" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                    <span class="d-flex align-items-center">
+                                        <span class="text-start ms-xl-2">
+                                            <span class="d-none d-xl-inline-block ms-1 fw-medium user-name-text">@authState.User.Identity?.Name</span>
+                                        </span>
+                                    </span>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-end">
+                                    <h6 class="dropdown-header">@authState.User.Identity?.Name</h6>
+                                    <div class="dropdown-divider"></div>
+                                    <form action="/admin/Account/Logout" method="post">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="dropdown-item">
+                                            <i class="mdi mdi-logout text-muted fs-16 align-middle me-1"></i> <span class="align-middle">Çıkış Yap</span>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </Authorized>
+                    </AuthorizeView>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-menu navbar-menu">
+        <div class="navbar-brand-box">
+            <a href="/admin" class="logo logo-dark">
+                <span class="logo-sm fs-22 fw-bold text-white">D</span>
+                <span class="logo-lg fs-22 fw-bold text-white">Dekorras</span>
+            </a>
+        </div>
+
+        <div id="scrollbar">
+            <div class="container-fluid">
+                <NavMenu />
+            </div>
+        </div>
+        <!-- Velzon'un "twocolumn"/"semibox" düzen varyantı için kullandığı boş konteyner - bu
+             projede o düzen varyantı KULLANILMIYOR (yalnızca "vertical" düzen), ama şablonun
+             kendi vendored app.js'i (y()/m() fonksiyonları) sayfa yüklemesinde KOŞULSUZ olarak
+             bu elemente innerHTML atamaya çalışıyor - element hiç yoksa bu "Cannot set properties
+             of null" TypeError'a yol açıyordu. Boş/gizli olarak burada bulunması, şablonun kendi
+             JS'ini DEĞİŞTİRMEDEN hatayı ortadan kaldırır. -->
+        <div id="two-column-menu" style="display:none"></div>
+    </div>
+    <div class="vertical-overlay"></div>
+
+    <div class="main-content">
+        <div class="page-content">
+            <div class="container-fluid">
+                @Body
+            </div>
+        </div>
+
+        <footer class="footer">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-sm-6">@DateTime.Now.Year © Dekorras Mimarlık Mühendislik</div>
+                    <div class="col-sm-6">
+                        <div class="text-sm-end d-none d-sm-block">Yönetim Paneli</div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+</div>
+
+<!-- Velzon'un vendored app.js'i, bu sadeleştirilmiş admin düzeninde HİÇ bulunmayan (gerçek "Tema
+     Ayarları" offcanvas paneli, bildirim dropdown'ı, sepet özeti gibi Velzon demo'suna özel
+     özellikler için) BİRÇOK elemente sayfa yüklemesinde KOŞULSUZ olarak (null kontrolü OLMADAN)
+     erişiyor - `#two-column-menu` için zaten uygulanan AYNI kök nedenin GENİŞLETİLMİŞ hali (bkz.
+     backend/README.md). Her biri tek tek kullanıcı geri bildirimiyle bulunup yamanmak yerine,
+     GERÇEKTEN eksik olan TÜM id'ler burada tek seferde, boş/gizli placeholder'lar olarak
+     eklendi - hiçbiri görsel/işlevsel bir şey YAPMIYOR (gerçek Tema Ayarları/bildirim UI'ı bu
+     projede yok), yalnızca app.js'in `getElementById(...).stil/olay` çağrılarının GERÇEK bir
+     DOM düğümü bulmasını sağlayıp "Cannot read properties of null" çökmesini önlüyor. -->
+<div style="display:none" aria-hidden="true">
+    <div id="vertical-hover"></div>
+    <div id="sidebar-size"></div>
+    <div id="sidebar-view"></div>
+    <div id="sidebar-color"></div>
+    <div id="sidebar-img"></div>
+    <div id="layout-position"></div>
+    <div id="layout-width"></div>
+    <div id="sidebar-visibility"></div>
+    <div id="body-img"></div>
+    <div id="empty-cart"></div>
+    <div id="checkout-elem"></div>
+    <div id="notification-actions"></div>
+    <div id="notificationDropdown"></div>
+    <div id="removeNotificationModal"></div>
+    <div id="delete-notification"></div>
+    <div id="reset-layout"></div>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Beklenmeyen bir hata oluştu.
+    <a href="." class="reload">Yenile</a>
+    <span class="dismiss">🗙</span>
+</div>

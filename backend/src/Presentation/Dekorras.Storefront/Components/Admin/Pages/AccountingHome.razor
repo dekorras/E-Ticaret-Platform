@@ -1,0 +1,33 @@
+﻿@page "/admin/accounting"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.SystemAdmin.Commands
+@using Dekorras.Domain.SystemAdmin
+@inject MediatR.ISender Sender
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthState
+
+<PageTitle>Muhasebe Modülü</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Muhasebe Modülü</h4>
+    <a class="btn btn-secondary mb-3" href="/admin">← Modül Değiştir</a>
+</div>
+
+<p class="text-muted mt-4">
+    Cari hesap yönetimi (aktif/pasif etme dahil), fatura yönetimi (otomatik taslak görüntüleme,
+    irsaliyeleştirme - gerçek bir İrsaliye kaydı oluşturur, e-Fatura/e-Arşiv olarak elle kesim
+    kaydı), kasa/banka hesabı yönetimi, gider kaydı, çek/senet takibi ve teklif yönetimi çalışır
+    durumdadır. Raporlar ekranı Varlıklar/Borçlar özet panosu sunar. Gerçek e-Fatura entegratör
+    API çağrısı (GİB'e fiili gönderim) bu sistemin kapsamında değildir - yalnızca sonucun kaydı
+    tutulur.
+</p>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (userId is not null)
+            await Sender.Send(new SetLastSelectedModuleCommand(userId, AppModule.Accounting));
+    }
+}

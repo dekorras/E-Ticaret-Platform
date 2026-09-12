@@ -1,0 +1,30 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+  pull_request:
+    paths:
+      - "backend/**"
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore backend/Dekorras.slnx
+
+      - name: Build
+        run: dotnet build backend/Dekorras.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test backend/Dekorras.slnx --no-build --configuration Release --logger "trx"

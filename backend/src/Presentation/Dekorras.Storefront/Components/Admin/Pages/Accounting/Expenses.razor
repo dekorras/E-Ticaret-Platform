@@ -1,0 +1,52 @@
+﻿@page "/admin/accounting/expenses"
+@attribute [Authorize(Policy = "AccountingAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.Accounting.Commands
+@using Dekorras.Application.Accounting.Queries
+@inject MediatR.ISender Sender
+
+<PageTitle>Giderler</PageTitle>
+
+<a class="btn btn-secondary mb-3" href="/admin/accounting">← Muhasebe Modülü</a>
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Giderler</h4>
+    <a class="btn btn-primary" href="/admin/accounting/expenses/new">+ Yeni Gider</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive table-card">
+            <table class="table table-nowrap align-middle mb-0">
+                <thead><tr><th>Tarih</th><th>Kategori</th><th>Tutar</th><th>Açıklama</th></tr></thead>
+                <tbody>
+                    @if (_expenses is not null)
+                    {
+                        @foreach (var expense in _expenses)
+                        {
+                            <tr>
+                                <td>@expense.ExpenseDateUtc.ToString("dd.MM.yyyy")</td>
+                                <td>@expense.CategoryName</td>
+                                <td>@expense.AmountTry.ToString("N2") ₺</td>
+                                <td>@expense.Description</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+                @if (_expenses is { Count: > 0 })
+                {
+                    <tfoot>
+                        <tr class="fw-bold"><td colspan="2">Toplam</td><td>@_expenses.Sum(e => e.AmountTry).ToString("N2") ₺</td><td></td></tr>
+                    </tfoot>
+                }
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyCollection<ExpenseDto>? _expenses;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _expenses = await Sender.Send(new GetExpensesQuery());
+}

@@ -1,0 +1,32 @@
+@using Dekorras.Storefront.Models
+@model RegisterFormModel
+@{
+    ViewData["Title"] = "Üye Ol";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <h1 class="h3 mb-3">Üye Ol</h1>
+
+        <form asp-controller="Account" asp-action="Register" method="post">
+            <div asp-validation-summary="All" class="text-danger"></div>
+
+            <div class="mb-2">
+                <label class="form-label">Ad Soyad</label>
+                <input asp-for="FullName" class="form-control" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">E-posta</label>
+                <input asp-for="Email" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Şifre</label>
+                <input asp-for="Password" class="form-control" />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Üye Ol</button>
+        </form>
+
+        <p class="mt-3 text-muted">Zaten üye misiniz? <a asp-controller="Account" asp-action="Login">Giriş yapın</a>.</p>
+    </div>
+</div>

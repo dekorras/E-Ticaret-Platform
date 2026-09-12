@@ -1,0 +1,8 @@
+/* Hızlı Bakış modalı - zaten vendored Bootstrap 5 modal bileşenini kullanır. */
+#dkQuickviewModal .modal-dialog {
+    max-width: 700px;
+}
+
+#dkQuickviewModal .modal-body {
+    min-height: 200px;
+}
