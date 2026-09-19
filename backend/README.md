@@ -2687,6 +2687,37 @@ SADECE "Ürün" sekmesinin göründüğü doğrulandı.
 **Sınırlama:** Sekmeler arası GERÇEK tıklama geçişi (Bootstrap JS'in DOM'u canlı güncellemesi)
 yalnızca gerçek bir tarayıcıda görülebilir - bu oturumda tarayıcı otomasyonu yok.
 
+## Kategoriler İkinci Sekme Oldu + Bağımsız Kaydetme
+
+Kullanıcı, bir önceki sekmeleştirme işleminden sonra "Kategoriler"in de "Ürün" sekmesinin İÇİNDE
+(sağ sütunda, form alanlarının arasında) kalmaya devam ettiğini fark edip bunu da AYRI ve İKİNCİ
+sırada bir sekmeye almak, ayrıca bunun için "kaydetme işlemi için gerekli yapılandırmayı" istedi -
+yani eskiden kategoriler yalnızca ana "Kaydet" (tüm ürünü fiyat/stok/SEO dahil yeniden gönderen)
+butonuyla kaydedilebiliyordu, kendi BAĞIMSIZ bir kaydet işlemi yoktu.
+
+**Uygulama:**
+- Yeni `SetProductCategoriesCommand` (+ handler, `Product.ProductCategories` koleksiyonunu
+  yükleyip `SetCategories(...)` çağırıyor - `UpdateProductCommand`'ın kategori güncelleme mantığıyla
+  BİREBİR aynı, `SetProductTrackStockCommand` ile AYNI "tek alanlık bağımsız kaydet" kalıbı).
+  Doğrulayıcı `UpdateProductCommand`'daki AYNI kuralı taşıyor: "Ürün en az bir kategoriye
+  atanmalıdır."
+- `ProductEdit.razor`: "Kategoriler" artık "Ürün"den hemen sonra, İKİNCİ sırada bir sekme
+  (`tab-kategoriler`) - kategori onay kutusu ağacı "Ürün" sekmesinin sağ sütunundan buraya
+  TAŞINDI. Bu sekme hem YENİ hem MEVCUT ürünlerde görünür (kategori seçimi ürün oluşturmanın bir
+  PARÇASI olduğu için "Ürün" sekmesiyle aynı görünürlük kuralına tabi değil, diğer 7 sekmenin
+  aksine). MEVCUT bir üründe kendi "Kaydet" butonu var (`SaveCategoriesAsync` →
+  `SetProductCategoriesCommand`, "Kategoriler kaydedildi." mesajı gösterir) - tüm ürünü yeniden
+  göndermeye GEREK KALMADAN yalnızca kategori ataması güncellenebiliyor. YENİ bir ürün için (henüz
+  DB'de yok, bağımsız kaydet ÇALIŞAMAZ) bunun yerine bir bilgi metni gösteriliyor: seçimler "Ürün"
+  sekmesindeki ana Kaydet ile (ürün oluşturma isteğinin bir parçası olarak) kaydedilecek.
+
+**Doğrulama:** `dotnet build` 0 hata, `dotnet test` 138/138 yeşil (yeni komutun validasyon/handler
+davranışı mevcut `UpdateProductCommand` testleriyle aynı iş kuralını paylaşıyor). Kestrel'de canlı
+HTTP ile: sekme sırasının Ürün→Kategoriler→Görseller→... olduğu, gerçek bir üründe kategori
+ağacının mevcut atamaları `checked` olarak doğru gösterdiği ve kendi "Kaydet" butonunun render
+edildiği, yeni ürün ekranında ise "Kategoriler" sekmesinin GÖRÜNDÜĞÜ ama bağımsız kaydet yerine
+bilgi metninin çıktığı doğrulandı.
+
 ## Sonraki fazlar (bkz. plan §13)
 
 Faz 0/1, Faz 2, Faz 3, Faz 4'ün akış/stok/kampanya dilimleri ve Faz 8 (Muhasebe) TAMAMLANDI. Content
