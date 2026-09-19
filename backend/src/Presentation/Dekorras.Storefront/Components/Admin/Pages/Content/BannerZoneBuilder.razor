@@ -661,10 +661,14 @@ else
                 : ex.Message;
         }
 
-        // Başarısız bir aksiyondan sonra bile ağacı yeniden yüklemek gerekir - ör. SortableJS bir
-        // sürükle-bırak'ı DOM'da İYİMSER OLARAK ZATEN uygulamıştır (bkz. OnNodeMoved); komut
-        // reddedilirse (geçersiz taşıma), sunucudaki GERÇEK durumu yeniden çekmek istemci
-        // görünümünü senkronize eder, aksi halde ekran sunucudan SAPMIŞ görünür.
+        // Başarısız bir aksiyondan sonra bile ağacı yeniden yüklemek gerekir - komut reddedilirse
+        // (ör. geçersiz bir taşıma), sunucudaki GERÇEK durumu yeniden çekmek istemci görünümünü
+        // senkronize eder, aksi halde ekran sunucudan SAPMIŞ görünür. NOT: SortableJS ARTIK DOM'da
+        // "iyimser" bir taşıma bırakmıyor - banner-zone-builder.js'in `onEnd` işleyicisi kendi
+        // yaptığı GÖRSEL taşımayı OnNodeMoved'i çağırmadan HEMEN ÖNCE geri alıyor (gerçek kullanıcı
+        // ekran görüntüsüyle bulunan bir "Cannot read properties of null (reading 'removeChild')"
+        // circuit çökmesinin kök nedeniydi - bkz. o dosyadaki ayrıntılı açıklama/backend/README.md).
+        // Yani buradaki LoadTreeAsync() artık SADECE gerçek/tek DOM güncellemesini yapıyor.
         await LoadTreeAsync();
     }
 

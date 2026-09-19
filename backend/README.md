@@ -2756,6 +2756,43 @@ projeksiyonu - `p.ProductCategories.Select(pc => pc.CategoryId).ToList()` - GER�
 karşı hatasız çalıştı), gerçek satırlarda "Kategori" sütununun birden fazla kategoriyi virgülle
 doğru gösterdiği doğrulandı.
 
+## BannerZoneBuilder'da Sürükle-Bırak Sonrası Circuit Çökmesi - GERÇEK Kök Neden
+
+Kullanıcı gerçek bir DevTools ekran görüntüsüyle `/admin/cms/banner-zones/{id}/builder` sayfasında
+şu hatayı bildirdi: `Error: There was an error applying batch 6` → `Unhandled exception in circuit`
+→ `Cannot read properties of null (reading 'removeChild')` - TÜM circuit çöküyor (WebSocket kapanıp
+sayfa tamamen tepkisiz kalıyordu).
+
+**Kök neden:** `banner-zone-builder.js`'in SortableJS `onEnd` işleyicisi, kullanıcının GERÇEK
+bırakma anında SortableJS'in ZATEN GERÇEK DOM'da FİZİKSEL olarak taşımış olduğu `evt.item`ı
+"iyimser bir UI güncellemesi" olarak OLDUĞU GİBİ bırakıp doğrudan `OnNodeMoved`i çağırıyordu.
+Blazor'un KENDİ render ağacı bu HARİCİ DOM taşımasından tamamen HABERSİZ - `OnNodeMoved`in
+tetiklediği `LoadTreeAsync()` sunucudan yeni ağacı çekip Blazor'a yeniden render ettirdiğinde,
+Blazor kendi ESKİ bildiği DOM yapısıyla artık SortableJS tarafından DEĞİŞTİRİLMİŞ gerçek DOM'u
+uzlaştırmaya (diff/patch) çalışıyor, bu sırada var OLMAYAN (SortableJS tarafından başka bir yere
+taşınmış) bir üst elemente `removeChild` çağırmaya kalkışıp TypeError fırlatıyor - bu, Blazor
+Server'ın DOM güncelleme "batch"ini uygulayamamasına ve GÜVENLİK ÖNLEMİ olarak TÜM circuit'i
+sonlandırmasına yol açıyordu (tek bir hatalı DOM işlemi bile Blazor Server'da KURTARILAMAZ,
+circuit tamamen yeniden başlatılmalıdır - bu yüzden sayfa tepkisiz kalıyordu).
+
+**Düzeltme:** `onEnd` işleyicisi artık `.NET`e haber vermeden HEMEN ÖNCE SortableJS'in yaptığı
+GÖRSEL taşımayı `evt.from`/`evt.oldIndex` referans alınarak GERİ ALIYOR - DOM, Blazor'un son
+bildiği haliyle AYNEN korunuyor. GERÇEK yeniden sıralama artık YALNIZCA `OnNodeMoved`in tetiklediği
+sunucu-onaylı Blazor render'ı (kendi diff'iyle DOM'u güncelleyerek) tarafından yapılıyor - iki
+FARKLI mekanizmanın (SortableJS'in kendi DOM manipülasyonu + Blazor'un render'ı) aynı anda AYNI
+DOM üzerinde çalışması TAMAMEN ortadan kaldırıldı. Bu, React/Vue gibi diğer VDOM çerçeveleriyle
+SortableJS entegre edilirken de kullanılan standart, kanıtlanmış bir kalıptır. `BannerZoneBuilder.razor`'daki
+artık geçersiz "SortableJS iyimser bir taşıma bırakır" varsayımını anlatan yorum da güncellendi.
+
+**Doğrulama:** `dotnet build` 0 hata, `dotnet test` 138/138 yeşil. Kestrel'de canlı HTTP ile
+kullanıcının GERÇEK banner bölgesi sayfasının (`bcc90e2c-...`) 200 döndüğü ve düzeltilmiş
+`banner-zone-builder.js`nin sunulduğu doğrulandı.
+
+**Sınırlama:** Gerçek bir sürükle-bırak işleminin (fare olaylarıyla) çökmeyi ARTIK tetiklemediğini
+KANITLAMAK yalnızca gerçek bir tarayıcıda mümkün - bu oturumda tarayıcı otomasyonu yok, kök neden
+analizi Kestrel'in sunucu-taraflı istisna günlüğünden (`TypeError: Cannot read properties of null
+(reading 'removeChild')`) doğrudan teşhis edildi.
+
 ## Sonraki fazlar (bkz. plan §13)
 
 Faz 0/1, Faz 2, Faz 3, Faz 4'ün akış/stok/kampanya dilimleri ve Faz 8 (Muhasebe) TAMAMLANDI. Content

@@ -31,6 +31,29 @@
 
                     var newParentId = evt.to.getAttribute('data-parent-id') || null;
                     var newIndex = evt.newIndex;
+                    var oldIndex = evt.oldIndex;
+
+                    // KRİTİK - GERÇEK kullanıcı ekran görüntüsüyle bulunan çökme: SortableJS bırakma
+                    // anında `evt.item`ı GERÇEK DOM'da FİZİKSEL olarak taşımış durumda (kendi iç
+                    // sürükleme mantığı gereği - bu kütüphanenin normal/beklenen davranışı). Blazor'un
+                    // KENDİ render ağacı bu taşımadan HABERSİZ; OnNodeMoved'in tetiklediği bir sonraki
+                    // Blazor render'ı (sunucudan gelen YENİ sırayı uygulamak için) kendi ESKİ bildiği
+                    // DOM yapısıyla artık SortableJS tarafından değiştirilmiş GERÇEK DOM'u uzlaştırmaya
+                    // çalışırken var OLMAYAN bir üst elemente `removeChild` çağırıp "Cannot read
+                    // properties of null (reading 'removeChild')" ile TÜM circuit'i çökertiyordu.
+                    // Çözüm: SortableJS'in yaptığı GÖRSEL taşımayı BURADA HEMEN geri al - DOM, Blazor'un
+                    // son bildiği haliyle AYNEN kalsın; GERÇEK yeniden sıralama, OnNodeMoved'in
+                    // tetiklediği sunucu-onaylı Blazor render'ı (DOM'u KENDİ bildiği şekilde, kendi
+                    // diff'iyle güncelleyerek) tarafından yapılsın. `evt.from`/`oldIndex` referans
+                    // alınarak elementin TAM eski konumuna (aynı veya farklı konteyner fark etmeksizin)
+                    // geri konması - iki VDOM çerçevesiyle (React/Vue) SortableJS entegre ederken de
+                    // kullanılan standart, kanıtlanmış bir kalıptır.
+                    var referenceNode = evt.from.children[oldIndex] || null;
+                    if (referenceNode) {
+                        evt.from.insertBefore(evt.item, referenceNode);
+                    } else {
+                        evt.from.appendChild(evt.item);
+                    }
 
                     dotNetHelper.invokeMethodAsync('OnNodeMoved', nodeId, newParentId, newIndex)
                         .catch(function (err) {
