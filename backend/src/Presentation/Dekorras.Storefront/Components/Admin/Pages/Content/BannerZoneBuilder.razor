@@ -50,7 +50,8 @@ else
                         <BannerNodeEditor Node="root" SelectedNodeId="_selectedNodeId" SelectedContentId="_selectedContentId"
                                           OnSelectNode="SelectNode" OnSelectContent="SelectContent"
                                           OnAddRowToColumn="AddRowToColumnAsync" OnAddContentToColumn="AddContentMode"
-                                          OnSplitRow="SplitRowAsync" OnDeleteNode="DeleteNodeAsync" OnDeleteContent="DeleteContentAsync" />
+                                          OnSplitRow="SplitRowAsync" OnDeleteNode="DeleteNodeAsync" OnDeleteContent="DeleteContentAsync"
+                                          OnDuplicateNode="DuplicateNodeAsync" />
                     </div>
                 }
                 @if (_tree.Roots.Count == 0)
@@ -691,6 +692,16 @@ else
     {
         await Sender.Send(new DeleteBannerNodeSubtreeCommand(nodeId));
         if (_selectedNodeId == nodeId) _selectedNodeId = null;
+    });
+
+    // Kullanıcı isteği - "Kopyala" butonu (bkz. backend/README.md). Kopyalanan düğüm (ve tüm alt
+    // ağacı/içerikleri) oluşturulduktan sonra otomatik olarak SEÇİLİR - kullanıcı hangi düğümün
+    // yeni kopya olduğunu hemen görüp düzenlemeye devam edebilsin diye.
+    private Task DuplicateNodeAsync(Guid nodeId) => RunTreeActionAsync(async () =>
+    {
+        var newNodeId = await Sender.Send(new DuplicateBannerNodeCommand(nodeId));
+        _selectedNodeId = newNodeId;
+        _selectedContentId = null;
     });
 
     private Task DeleteContentAsync(Guid contentId) => RunTreeActionAsync(async () =>

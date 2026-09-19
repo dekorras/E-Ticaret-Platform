@@ -51,6 +51,9 @@
                     <button class="btn btn-sm btn-outline-success" @onclick="() => OnAddContentToColumn.InvokeAsync(Node.Id)">+ İçerik Ekle</button>
                 }
 
+                <button class="btn btn-sm btn-outline-secondary" title="Bu @(Node.NodeType == BannerNodeType.Row ? "satırı" : "kolonu") (tüm alt öğeleriyle birlikte) kopyala"
+                        @onclick="() => OnDuplicateNode.InvokeAsync(Node.Id)">Kopyala</button>
+
                 @if (_confirmingDelete)
                 {
                     <span class="small text-danger">Emin misiniz?</span>
@@ -88,7 +91,8 @@
                         <BannerNodeEditor Node="child" SelectedNodeId="SelectedNodeId" SelectedContentId="SelectedContentId"
                                           OnSelectNode="OnSelectNode" OnSelectContent="OnSelectContent"
                                           OnAddRowToColumn="OnAddRowToColumn" OnAddContentToColumn="OnAddContentToColumn"
-                                          OnSplitRow="OnSplitRow" OnDeleteNode="OnDeleteNode" OnDeleteContent="OnDeleteContent" />
+                                          OnSplitRow="OnSplitRow" OnDeleteNode="OnDeleteNode" OnDeleteContent="OnDeleteContent"
+                                          OnDuplicateNode="OnDuplicateNode" />
                     </div>
                 }
                 @if (Node.Children.Count == 0)
@@ -106,7 +110,8 @@
                         <BannerNodeEditor Node="child" SelectedNodeId="SelectedNodeId" SelectedContentId="SelectedContentId"
                                           OnSelectNode="OnSelectNode" OnSelectContent="OnSelectContent"
                                           OnAddRowToColumn="OnAddRowToColumn" OnAddContentToColumn="OnAddContentToColumn"
-                                          OnSplitRow="OnSplitRow" OnDeleteNode="OnDeleteNode" OnDeleteContent="OnDeleteContent" />
+                                          OnSplitRow="OnSplitRow" OnDeleteNode="OnDeleteNode" OnDeleteContent="OnDeleteContent"
+                                          OnDuplicateNode="OnDuplicateNode" />
                     </div>
                 }
                 @if (Node.Children.Count == 0)
@@ -145,6 +150,9 @@
 
     [Parameter]
     public EventCallback<Guid> OnDeleteNode { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnDuplicateNode { get; set; }
 
     [Parameter]
     public EventCallback<Guid> OnDeleteContent { get; set; }

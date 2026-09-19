@@ -159,6 +159,97 @@ public sealed class MoveBannerNodeCommandHandler(IUnitOfWork unitOfWork) : IRequ
     }
 }
 
+/// <summary>
+/// Bir Row ya da Column düğümünü ve TÜM alt ağacını (iç içe satırlar/kolonlar + onlara bağlı TÜM
+/// içerikler) DERİN KOPYALAR - admin panelindeki "Kopyala" butonu, kullanıcı isteği (bkz.
+/// backend/README.md). Kopya, orijinaliyle AYNI kardeş grubunda HEMEN YANINA (SortOrder =
+/// orijinal + 1) yerleştirilir, ondan sonraki tüm kardeşler bir kaydırılır. `BaseEntity.Id`nin
+/// İSTEMCİ TARAFINDA (ctor'da, bkz. BaseEntity.cs) üretilmesi sayesinde `AddBannerRowCommand`daki
+/// İKİ AŞAMALI kaydetme GEREKMEZ - her klonun Id'si/Path'i oluşturulduğu ANDA bilinir, tüm alt ağaç
+/// bellekte kurulup TEK bir SaveChanges ile kaydedilir.
+/// </summary>
+public sealed record DuplicateBannerNodeCommand(Guid NodeId) : IRequest<Guid>;
+
+public sealed class DuplicateBannerNodeCommandHandler(IUnitOfWork unitOfWork) : IRequestHandler<DuplicateBannerNodeCommand, Guid>
+{
+    public async Task<Guid> Handle(DuplicateBannerNodeCommand request, CancellationToken cancellationToken)
+    {
+        var nodeRepository = unitOfWork.Repository<BannerNode>();
+        var contentRepository = unitOfWork.Repository<BannerContent>();
+
+        var original = nodeRepository.Query().FirstOrDefault(n => n.Id == request.NodeId)
+            ?? throw new KeyNotFoundException($"'{request.NodeId}' numaralı düğüm bulunamadı.");
+
+        var subtreeNodes = nodeRepository.Query()
+            .Where(n => n.BannerZoneId == original.BannerZoneId && n.Path.StartsWith(original.Path))
+            .ToList();
+        var subtreeNodeIds = subtreeNodes.Select(n => n.Id).ToList();
+        var subtreeContents = contentRepository.Query()
+            .Where(c => subtreeNodeIds.Contains(c.BannerNodeId))
+            .ToList();
+
+        var childrenByParentId = subtreeNodes
+            .Where(n => n.Id != original.Id)
+            .GroupBy(n => n.ParentId!.Value)
+            .ToDictionary(g => g.Key, g => g.OrderBy(n => n.SortOrder).ToList());
+        var contentsByNodeId = subtreeContents
+            .GroupBy(c => c.BannerNodeId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(c => c.SortOrder).ToList());
+
+        // Orijinalin kardeş grubunda ONDAN SONRAKİ herkesi bir kaydır - kopya TAM yanına gelsin,
+        // listenin sonuna DEĞİL (kullanıcının "kopyala" ile beklediği - orijinali hemen takip etmesi).
+        var followingSiblings = nodeRepository.Query()
+            .Where(n => n.BannerZoneId == original.BannerZoneId && n.ParentId == original.ParentId && n.SortOrder > original.SortOrder)
+            .ToList();
+        foreach (var sibling in followingSiblings) sibling.Reorder(sibling.SortOrder + 1);
+
+        string? originalParentPath = original.ParentId is null
+            ? null
+            : nodeRepository.Query().Where(n => n.Id == original.ParentId).Select(n => n.Path).First();
+
+        var newRootId = Guid.Empty;
+
+        async Task CloneSubtreeAsync(BannerNode source, Guid? cloneParentId, string? cloneParentPath, int sortOrder, int depth)
+        {
+            var clone = new BannerNode(source.BannerZoneId, cloneParentId, source.NodeType, sortOrder, depth, path: "");
+            clone.SetSettings(source.SettingsJson);
+            clone.SetCustomAttributes(source.CustomCssClass, source.CustomId);
+            if (!source.IsActive) clone.Deactivate();
+            clone.Reparent(cloneParentId, AddBannerRowCommandHandler.BuildPath(cloneParentPath, clone.Id), depth, sortOrder);
+            await nodeRepository.AddAsync(clone, cancellationToken);
+
+            if (newRootId == Guid.Empty) newRootId = clone.Id;
+
+            if (contentsByNodeId.TryGetValue(source.Id, out var contents))
+            {
+                foreach (var content in contents)
+                {
+                    var contentClone = new BannerContent(clone.Id, content.ContentType, content.SortOrder);
+                    contentClone.UpdateText(content.Title, content.Subtitle, content.Body, content.ButtonText);
+                    contentClone.UpdateImage(content.ImageUrl, content.ImageUrlMobile, content.AltText);
+                    contentClone.UpdateLink(content.LinkUrl, content.LinkTarget);
+                    contentClone.SetSettings(content.SettingsJson);
+                    contentClone.Schedule(content.StartDateUtc, content.EndDateUtc);
+                    if (!content.IsActive) contentClone.Deactivate();
+                    await contentRepository.AddAsync(contentClone, cancellationToken);
+                }
+            }
+
+            if (childrenByParentId.TryGetValue(source.Id, out var children))
+            {
+                for (var i = 0; i < children.Count; i++)
+                    await CloneSubtreeAsync(children[i], clone.Id, clone.Path, i, depth + 1);
+            }
+        }
+
+        await CloneSubtreeAsync(original, original.ParentId, originalParentPath, original.SortOrder + 1, original.Depth);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return newRootId;
+    }
+}
+
 /// <summary>Bir düğümü ve TÜM alt ağacını (Path LIKE ile) siler - ilişkili içerikler DB cascade ile birlikte gider.</summary>
 public sealed record DeleteBannerNodeSubtreeCommand(Guid Id) : IRequest<Unit>;
 

@@ -2793,6 +2793,39 @@ KANITLAMAK yalnızca gerçek bir tarayıcıda mümkün - bu oturumda tarayıcı 
 analizi Kestrel'in sunucu-taraflı istisna günlüğünden (`TypeError: Cannot read properties of null
 (reading 'removeChild')`) doğrudan teşhis edildi.
 
+## BannerZoneBuilder'a "Satırı/Kolonu Kopyala" Eklendi
+
+Kullanıcı, ekran görüntüsünde bir Satır'ın buton çubuğundaki (Kolonlara Böl/Sil'in yanındaki) boş
+alanı işaretleyip bu tür bir düğümü (tüm alt öğeleriyle) TEK tıkla kopyalayabilmek istedi.
+
+**Uygulama:**
+- Yeni `DuplicateBannerNodeCommand` (+ handler) bir Row ya da Column düğümünü ve TÜM alt ağacını
+  (iç içe satırlar/kolonlar + onlara bağlı TÜM `BannerContent`ları) DERİN KOPYALAR. Kopya,
+  orijinaliyle AYNI kardeş grubunda HEMEN YANINA yerleştirilir (`SortOrder = orijinal + 1`),
+  ondan sonraki tüm kardeşler bir kaydırılır - kopya listenin SONUNA değil, kullanıcının
+  BEKLEDİĞİ yere (orijinalin hemen ardına) düşer. `BaseEntity.Id`nin İSTEMCİ TARAFINDA (ctor'da)
+  üretilmesi sayesinde `AddBannerRowCommand`daki İKİ AŞAMALI kaydetme kalıbı GEREKMEDİ - tüm alt
+  ağaç bellekte (doğru Id/Path'lerle) kurulup TEK bir `SaveChanges` ile kaydediliyor.
+- `BannerNodeEditor.razor`'a hem Row hem Column düğümleri için "Kopyala" butonu eklendi (buton
+  çubuğunda "Kolonlara Böl"/"+İçine Satır Ekle" gibi mevcut aksiyonların yanında); yeni
+  `OnDuplicateNode` EventCallback'i özyinelemeli bileşen çağrılarının hepsine iletildi.
+  `BannerZoneBuilder.razor`'daki `DuplicateNodeAsync`, kopyalanan düğümü otomatik olarak SEÇİLİ hale
+  getiriyor - kullanıcı hangi düğümün yeni kopya olduğunu hemen görüp düzenlemeye devam edebiliyor.
+- Yeni GERÇEK bir entegrasyon testi (`BannerZoneDuplicationRegressionTests`, gerçek SQL Server'a
+  karşı) eklendi - iç içe kolonlar/içerik/alt satır İÇEREN bir satırı kopyalayıp: (a) kopyanın
+  kardeş sırasının DOĞRU olduğunu (orijinalin hemen yanı, sonraki kardeşin kaydığı), (b) tüm alt
+  ağacın (kolonlar/içerik/iç içe satır) FARKLI Id'lerle ama AYNI alan değerleriyle klonlandığını,
+  (c) orijinalin KENDİ alt ağacının bozulmadan kaldığını KANITLIYOR.
+
+**Doğrulama:** `dotnet build` 0 hata, `dotnet test` **139/139** yeşil (yeni entegrasyon testi
+dahil - gerçek SQL Server'a karşı çalışıp derin kopyalama mantığını uçtan uca doğruladı). Kestrel'de
+canlı HTTP ile kullanıcının gerçek banner sayfasında "Kopyala" butonunun render edildiği doğrulandı.
+
+**Sınırlama:** Butona gerçek bir tıklamayla sonucun tarayıcıda görsel olarak doğru göründüğünü
+kanıtlamak yalnızca gerçek bir tarayıcıda mümkün - bu oturumda tarayıcı otomasyonu yok, ANCAK
+komutun kendisi (asıl iş mantığı) yukarıdaki entegrasyon testiyle gerçek bir veritabanına karşı
+uçtan uca doğrulandı.
+
 ## Sonraki fazlar (bkz. plan §13)
 
 Faz 0/1, Faz 2, Faz 3, Faz 4'ün akış/stok/kampanya dilimleri ve Faz 8 (Muhasebe) TAMAMLANDI. Content
