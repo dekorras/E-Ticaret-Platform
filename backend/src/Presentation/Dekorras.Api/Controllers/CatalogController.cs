@@ -12,8 +12,8 @@ public sealed class CatalogController(ISender sender) : ControllerBase
 {
     [HttpGet("products")]
     [AllowAnonymous]
-    [ProducesResponseType<IReadOnlyCollection<ProductListItemDto>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyCollection<ProductListItemDto>>> GetProducts(
+    [ProducesResponseType<Dekorras.Application.Catalog.Storefront.PagedResult<ProductListItemDto>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<Dekorras.Application.Catalog.Storefront.PagedResult<ProductListItemDto>>> GetProducts(
         [FromQuery] string languageCode = "tr", [FromQuery] Guid? categoryId = null,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 25, CancellationToken cancellationToken = default) =>
         Ok(await sender.Send(new GetProductsQuery(languageCode, categoryId, page, pageSize), cancellationToken));

@@ -1,9 +1,11 @@
-﻿@page "/admin/ecommerce/products"
+@page "/admin/ecommerce/products"
 @attribute [Authorize(Policy = "ECommerceAccess")]
 @rendermode InteractiveServer
 @using Dekorras.Application.Catalog.Commands
 @using Dekorras.Application.Catalog.Queries
+@using Dekorras.Application.Catalog.Storefront
 @using Dekorras.Domain.Catalog
+@using Dekorras.Storefront.Models
 @inject MediatR.ISender Sender
 @inject NavigationManager NavigationManager
 
@@ -13,39 +15,130 @@
     <h4 class="mb-sm-0">Ürünler</h4>
     <a class="btn btn-primary" href="/admin/ecommerce/products/new">+ Yeni Ürün</a>
 </div>
+<p class="text-muted">
+    Kategoriler sayfasındaki AYNI filtreleme mantığı - kategoriye, markaya, duruma ve stok
+    durumuna göre daraltabilirsiniz. Katalogda binlerce ürün olabileceği için (Kategoriler'in
+    aksine) bu filtreler SUNUCU tarafında çalışır - her seçim gerçek bir veritabanı sorgusu
+    tetikler, DataTables'ın kendi arama kutusu ise yalnızca O AN yüklü sayfadaki satırlar
+    içinde arar.
+</p>
 
-<div class="card">
-    <div class="card-body">
-        <div class="table-responsive table-card">
-            <table id="productsTable" class="table table-nowrap align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th>Ürün Kodu</th>
-                        <th>Ad</th>
-                        <th>Fiyat (TRY)</th>
-                        <th>Stok</th>
-                        <th>Durum</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_products is not null)
-                    {
-                        @foreach (var product in _products)
+<div class="row g-2 mb-3 align-items-end">
+    <div class="col-auto">
+        <label class="form-label small mb-0">Durum</label>
+        <select class="form-select form-select-sm" style="width: 160px;" @bind="_statusFilterText" @bind:after="ApplyFiltersAsync">
+            <option value="">Tümü</option>
+            <option value="@((int)ProductStatus.Active)">Yayında</option>
+            <option value="@((int)ProductStatus.Draft)">Taslak</option>
+            <option value="@((int)ProductStatus.Inactive)">Yayında Değil</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Kategori</label>
+        <select class="form-select form-select-sm" style="width: 220px;" @bind="_categoryFilterText" @bind:after="ApplyFiltersAsync">
+            <option value="">Tümü</option>
+            @foreach (var option in _categoryOptions)
+            {
+                <option value="@option.Id">@(new string('—', option.Depth > 0 ? 1 : 0)) @option.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Marka</label>
+        <select class="form-select form-select-sm" style="width: 200px;" @bind="_brandFilterText" @bind:after="ApplyFiltersAsync">
+            <option value="">Tümü</option>
+            @foreach (var brand in _brands)
+            {
+                <option value="@brand.Id">@brand.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Stok Durumu</label>
+        <select class="form-select form-select-sm" style="width: 160px;" @bind="_stockFilterText" @bind:after="ApplyFiltersAsync">
+            <option value="">Tümü</option>
+            <option value="var">Stokta Var</option>
+            <option value="yok">Stokta Yok</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-0">Sayfa Başına</label>
+        <select class="form-select form-select-sm" style="width: 110px;" @bind="_pageSize" @bind:after="ApplyFiltersAsync">
+            @foreach (var size in ProductListingHelper.AllowedPageSizes)
+            {
+                <option value="@size">@size</option>
+            }
+        </select>
+    </div>
+    @if (_statusFilterText != "" || _categoryFilterText != "" || _brandFilterText != "" || _stockFilterText != "")
+    {
+        <div class="col-auto">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="ClearFiltersAsync">Filtreleri Temizle</button>
+        </div>
+    }
+</div>
+
+@if (_result is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <p class="text-muted small mb-0">
+                    Toplam @_result.TotalCount üründen @(_result.Items.Count == 0 ? 0 : ((_currentPage - 1) * _pageSize + 1))-@((_currentPage - 1) * _pageSize + _result.Items.Count) arası gösteriliyor.
+                </p>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" disabled="@(_currentPage <= 1)" @onclick="() => GoToPageAsync(_currentPage - 1)">← Önceki Sayfa</button>
+                    <button class="btn btn-outline-secondary" disabled="@(_currentPage >= _result.TotalPages)" @onclick="() => GoToPageAsync(_currentPage + 1)">Sonraki Sayfa →</button>
+                </div>
+            </div>
+
+            <div class="table-responsive table-card">
+                <table id="productsTable" class="table table-nowrap align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Ürün Kodu</th>
+                            <th>Ad</th>
+                            <th>Kategori</th>
+                            <th>Marka</th>
+                            <th>Fiyat (TRY)</th>
+                            <th>Stok</th>
+                            <th>Stok Durumu</th>
+                            <th>Durum</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var product in _result.Items)
                         {
                             <tr>
                                 <td>@product.ProductCode</td>
                                 <td>@product.Name</td>
+                                <td class="text-muted">@CategoryNames(product.CategoryIds)</td>
+                                <td class="text-muted">@(product.BrandName ?? "—")</td>
                                 @* data-order: DataTables varsayılan METİN sıralaması "9,00" > "10,00" gibi
                                    YANLIŞ sonuç verirdi - ham sayısal değer değişmez kültürle sağlanır. *@
                                 <td data-order="@product.PriceTry.ToString(System.Globalization.CultureInfo.InvariantCulture)">@product.PriceTry.ToString("N2")</td>
                                 <td>@product.StockQuantity</td>
                                 <td>
+                                    @if (product.StockQuantity > 0)
+                                    {
+                                        <span class="badge bg-success-subtle text-success">Stokta Var</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger">Stokta Yok</span>
+                                    }
+                                </td>
+                                <td>
                                     <span class="badge @(product.Status == ProductStatus.Active ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")">
                                         @(product.Status == ProductStatus.Active ? "Yayında" : product.Status == ProductStatus.Draft ? "Taslak" : "Yayında Değil")
                                     </span>
                                 </td>
-                                <td>
+                                <td class="text-nowrap">
                                     <a class="btn btn-sm btn-outline-primary" href="/admin/ecommerce/products/@product.Id">Düzenle</a>
                                     @if (product.Status == ProductStatus.Active)
                                     {
@@ -58,26 +151,90 @@
                                 </td>
                             </tr>
                         }
-                    }
-                </tbody>
-            </table>
-            <DataTableScript TableId="productsTable" ReloadToken="_products" />
+                    </tbody>
+                </table>
+                @* ReloadToken sayfa/filtre her değiştiğinde YENİ bir liste referansı olduğu için
+                   DataTableScript bunu otomatik "yeniden yüklendi" sinyali olarak algılar. Bu
+                   sayfada `order`in bilinçli olarak KORUNMASINA gerek yok (CategoryList'teki
+                   hiyerarşi sırasının aksine, ürün sırası zaten anlamlı bir DisplayOrder). *@
+                <DataTableScript TableId="productsTable" ReloadToken="_result" />
+            </div>
         </div>
     </div>
-</div>
+}
 
 @code {
     private const string LanguageCode = "tr";
-    private IReadOnlyCollection<ProductListItemDto>? _products;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    private PagedResult<ProductListItemDto>? _result;
+    private IReadOnlyCollection<(Guid Id, string Name, int Depth)> _categoryOptions = [];
+    private IReadOnlyCollection<BrandDto> _brands = [];
+    private Dictionary<Guid, string> _categoryNameById = new();
 
-    private async Task LoadAsync() =>
-        _products = await Sender.Send(new GetProductsQuery(LanguageCode, CategoryId: null, Page: 1, PageSize: 100));
+    private string _statusFilterText = "";
+    private string _categoryFilterText = "";
+    private string _brandFilterText = "";
+    private string _stockFilterText = "";
+    private int _pageSize = ProductListingHelper.DefaultPageSize;
+    private int _currentPage = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var tree = await Sender.Send(new GetCategoryTreeQuery(LanguageCode));
+        _categoryOptions = Flatten(tree, 0).ToList();
+        _categoryNameById = _categoryOptions.ToDictionary(c => c.Id, c => c.Name);
+        _brands = await Sender.Send(new GetBrandsQuery());
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        Guid? categoryId = Guid.TryParse(_categoryFilterText, out var parsedCategoryId) ? parsedCategoryId : null;
+        Guid? brandId = Guid.TryParse(_brandFilterText, out var parsedBrandId) ? parsedBrandId : null;
+        ProductStatus? status = Enum.TryParse<ProductStatus>(_statusFilterText, out var parsedStatus) ? parsedStatus : null;
+        bool? inStock = _stockFilterText switch { "var" => true, "yok" => false, _ => null };
+
+        _result = await Sender.Send(new GetProductsQuery(LanguageCode, categoryId, _currentPage, _pageSize, brandId, status, inStock));
+    }
+
+    private Task ApplyFiltersAsync()
+    {
+        _currentPage = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPageAsync(int page)
+    {
+        _currentPage = page;
+        return LoadAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _statusFilterText = "";
+        _categoryFilterText = "";
+        _brandFilterText = "";
+        _stockFilterText = "";
+        _currentPage = 1;
+        await LoadAsync();
+    }
+
+    private string CategoryNames(IReadOnlyCollection<Guid> categoryIds) =>
+        categoryIds.Count == 0 ? "—" : string.Join(", ", categoryIds.Select(id => _categoryNameById.GetValueOrDefault(id, "?")));
 
     private async Task TogglePublishAsync(Guid id, bool publish)
     {
         await Sender.Send(new SetProductPublishedCommand(id, publish));
         await LoadAsync();
+    }
+
+    private static IEnumerable<(Guid Id, string Name, int Depth)> Flatten(IReadOnlyCollection<CategoryTreeItemDto> nodes, int depth)
+    {
+        foreach (var node in nodes)
+        {
+            yield return (node.Id, node.Name, depth);
+            foreach (var descendant in Flatten(node.Children, depth + 1))
+                yield return descendant;
+        }
     }
 }

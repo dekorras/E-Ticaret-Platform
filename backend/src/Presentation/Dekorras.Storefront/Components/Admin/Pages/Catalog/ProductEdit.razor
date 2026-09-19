@@ -763,7 +763,7 @@ else
         try
         {
             var candidates = await Sender.Send(new GetProductsQuery(_editingLanguageCode, CategoryId: null, Page: 1, PageSize: 1000));
-            var match = candidates.FirstOrDefault(p => string.Equals(p.ProductCode, _newRelatedProductCode, StringComparison.OrdinalIgnoreCase));
+            var match = candidates.Items.FirstOrDefault(p => string.Equals(p.ProductCode, _newRelatedProductCode, StringComparison.OrdinalIgnoreCase));
             if (match is null)
             {
                 _relatedProductError = $"'{_newRelatedProductCode}' ürün kodlu bir ürün bulunamadı.";

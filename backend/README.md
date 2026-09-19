@@ -2718,6 +2718,44 @@ ağacının mevcut atamaları `checked` olarak doğru gösterdiği ve kendi "Kay
 edildiği, yeni ürün ekranında ise "Kategoriler" sekmesinin GÖRÜNDÜĞÜ ama bağımsız kaydet yerine
 bilgi metninin çıktığı doğrulandı.
 
+## Ürünler Sayfasına Kategoriler'deki Filtreleme Mantığı Getirildi
+
+Kullanıcı, admin panelindeki Kategoriler sayfasının filtre-satırı + DataTable görünümünü (bkz.
+ekran görüntüsü) Ürünler sayfasına da uygulamamı, ürünlerin kategoriye ve "bir çok özelliğe göre"
+filtrelenebilmesini istedi.
+
+**Kritik fark - GERÇEK veri hacmi:** Kategoriler sayfası TÜM satırları (25 kategori) istemciye
+yükleyip `dekorrasDataTable.filterColumn` ile İSTEMCİ tarafında filtreliyor - bu 25 satır için
+sorunsuz. Ürünler tablosunda ise **1999 gerçek ürün** olduğu (`sqlcmd`ile doğrulandı) görülünce bu
+YAKLAŞIMIN BİREBİR kopyalanmasının GERÇEK bir performans sorunu olacağı anlaşıldı: 1999 satırı
+(her biri birkaç etkileşimli Blazor butonuyla) tek seferde render edip SignalR üzerinden istemciye
+göndermek circuit'i şişirir. Bu yüzden Ürünler sayfasında filtreleme İSTEMCİ tarafında DEĞİL,
+SUNUCU tarafında (gerçek bir SQL sorgusunun WHERE koşulları olarak) yapılıyor - DataTables yalnızca
+O AN sunucudan çekilmiş sayfanın KENDİ İÇİNDE arama/sıralama sağlıyor.
+
+**Uygulama:**
+- `GetProductsQuery` (admin) genişletildi: `Guid? BrandId`, `ProductStatus? Status`, `bool? InStock`
+  filtreleri eklendi; `CategoryId` filtresi artık `GetStorefrontProductsQuery`deki AYNI
+  "kategori + TÜM alt ağacı" mantığını kullanıyor (bir üst kategori seçilince alt kategorilerdeki
+  ürünler de dahil edilir - aksi halde devamı 80'de bulunan AYNI kök nedenin bir başka örneği
+  olurdu). Dönüş tipi `IReadOnlyCollection<ProductListItemDto>`den `PagedResult<ProductListItemDto>`
+  (`GetStorefrontProductsQuery`de zaten tanımlı, `TotalCount`/`TotalPages` içeren genel sarmalayıcı)
+  'a değiştirildi - iki çağıran nokta (`CatalogController`, `ProductEdit.razor`'daki ilişkili ürün
+  arama) buna göre güncellendi. `ProductListItemDto`ya `BrandId`/`BrandName`/`CategoryIds` eklendi.
+- `ProductList.razor`: Kategoriler sayfasıyla AYNI görsel filtre-satırı üslubu (Durum/Kategori/
+  Marka/Stok Durumu + Sayfa Başına), ama her seçim bir SUNUCU round-trip'i (`LoadAsync`)
+  tetikliyor - CategoryList'in `dekorrasDataTable.filterColumn` JS çağrılarının AKSİNE. Tablo yeni
+  "Kategori" (bir ürünün BİRDEN FAZLA kategorisi olabileceği için virgülle ayrılmış liste) ve
+  "Marka" sütunlarını + gerçek bir "Stok Durumu" rozetini kazandı. Gerçek "Toplam N üründen X-Y
+  arası" sayacı + Önceki/Sonraki sayfa butonları eklendi (storefront'un `_Pagination.cshtml`
+  deseniyle AYNI fikir, Blazor'a uyarlanmış).
+
+**Doğrulama:** `dotnet build` 0 hata, `dotnet test` 138/138 yeşil. Kestrel'de canlı HTTP ile: sayfa
+"Toplam 1999 üründen 1-25 arası gösteriliyor" ile DOĞRU render edildi (EF Core'un iç içe koleksiyon
+projeksiyonu - `p.ProductCategories.Select(pc => pc.CategoryId).ToList()` - GERÇEK SQL Server'a
+karşı hatasız çalıştı), gerçek satırlarda "Kategori" sütununun birden fazla kategoriyi virgülle
+doğru gösterdiği doğrulandı.
+
 ## Sonraki fazlar (bkz. plan §13)
 
 Faz 0/1, Faz 2, Faz 3, Faz 4'ün akış/stok/kampanya dilimleri ve Faz 8 (Muhasebe) TAMAMLANDI. Content
