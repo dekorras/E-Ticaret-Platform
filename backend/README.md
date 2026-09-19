@@ -2661,6 +2661,32 @@ yapıldı - hiçbir şifre/token bu oturumda saklanmadı/loglanmadı.
 (önceden hazırlanmış CI - build+test) dahil. `dotnet build`/`dotnet test` (138 test) push öncesi
 son kez yeşil doğrulandı.
 
+## Ürün Düzenleme Ekranı Sekmelere Bölündü
+
+Kullanıcı `/admin/ecommerce/products/{id}` sayfasının (Ürün/Görseller/Videolar/İlgili Ürünler/
+Varyantlar/Toplu Alım İndirimi/Müşteri Grubu Fiyatları/Özellikler) tek bir uzun dikey kaydırma
+sayfası olmasından memnun değildi, her bölümün ayrı bir sekmede gösterilmesini istedi.
+
+`ProductEdit.razor`'daki `<hr>`+`<h4>` ile ayrılmış 8 bölüm, `BannerZoneBuilder.razor`'da ZATEN
+kanıtlanmış AYNI sekme kalıbına çevrildi: `nav nav-tabs nav-tabs-custom nav-success` (Velzon'un
+kendi "detay sayfası sekmesi" stili) + `data-bs-toggle="tab"` - sekme geçişi Bootstrap'ın KENDİ
+JS'i tarafından yapılır (`bootstrap.bundle.min.js` zaten kalıcı admin kabuğunda yüklü), sunucu
+round-trip'i GEREKMEZ. `_activeTab` alanı yalnızca hangi sekmenin `active`/`show active` sınıfıyla
+BAŞLAYACAĞINI belirler. Yeni bir ürün (`/products/new`) henüz veritabanında olmadığı için (görsele/
+varyanta/vs. sahip olamaz) eski `@if (!IsNew)` koruması AYNEN korundu - yalnızca "Ürün" sekmesi
+gösteriliyor, diğer 7 sekme yalnızca MEVCUT bir ürün düzenlenirken görünüyor. "Kaydet"/"Vazgeç"
+butonları "Ürün" sekmesinin içine taşındı (diğer sekmelerin zaten kendi satır-bazlı Ekle/Kaydet/Sil
+butonları var, davranış DEĞİŞMEDİ).
+
+**Doğrulama:** `dotnet build` 0 hata, `dotnet test` 138/138 yeşil. Kestrel'de canlı HTTP ile: gerçek
+bir ürün sayfasında 8 sekmenin TAMAMININ (`tab-urun`/`tab-gorseller`/`tab-videolar`/`tab-ilgili`/
+`tab-varyantlar`/`tab-toplu-indirim`/`tab-grup-fiyat`/`tab-ozellikler`) render edildiği, yalnızca
+"Ürün" sekmesinin başlangıçta `show active` olduğu (toplam 1 eşleşme), yeni ürün ekranında ise
+SADECE "Ürün" sekmesinin göründüğü doğrulandı.
+
+**Sınırlama:** Sekmeler arası GERÇEK tıklama geçişi (Bootstrap JS'in DOM'u canlı güncellemesi)
+yalnızca gerçek bir tarayıcıda görülebilir - bu oturumda tarayıcı otomasyonu yok.
+
 ## Sonraki fazlar (bkz. plan §13)
 
 Faz 0/1, Faz 2, Faz 3, Faz 4'ün akış/stok/kampanya dilimleri ve Faz 8 (Muhasebe) TAMAMLANDI. Content

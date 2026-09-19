@@ -32,6 +32,45 @@ else
         <p class="form-text text-muted">Ad/Açıklama/Meta alanları seçilen dile göre ayrı ayrı saklanır - diğer alanlar (fiyat, stok, vb.) dilden bağımsızdır.</p>
     </div>
 
+    @* Ürün düzenleme ekranındaki her bölüm (Ürün/Görseller/Videolar/İlgili Ürünler/Varyantlar/
+       Toplu Alım İndirimi/Müşteri Grubu Fiyatları/Özellikler) artık AYRI bir sekme - kullanıcı
+       isteği (bkz. backend/README.md). BannerZoneBuilder.razor'daki AYNI kalıp: Bootstrap'ın
+       `data-bs-toggle="tab"` JS'i sekme geçişini YAPAR (sunucu round-trip'i GEREKMEZ), `_activeTab`
+       alanı yalnızca hangi sekmenin "active"/"show active" sınıfıyla başlayacağını belirler. Yeni
+       bir ürün henüz veritabanında OLMADIĞI için (görsele/varyanta sahip olamaz) yalnızca "Ürün"
+       sekmesi gösterilir - eski `@if (!IsNew)` koruması AYNEN korunuyor. *@
+    <ul class="nav nav-tabs nav-tabs-custom nav-success mb-3" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "urun" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#tab-urun" type="button" @onclick='() => _activeTab = "urun"'>Ürün</button>
+        </li>
+        @if (!IsNew)
+        {
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "gorseller" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#tab-gorseller" type="button" @onclick='() => _activeTab = "gorseller"'>Görseller</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "videolar" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#tab-videolar" type="button" @onclick='() => _activeTab = "videolar"'>Videolar</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "ilgili" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#tab-ilgili" type="button" @onclick='() => _activeTab = "ilgili"'>İlgili Ürünler</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "varyantlar" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#tab-varyantlar" type="button" @onclick='() => _activeTab = "varyantlar"'>Varyantlar</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "toplu-indirim" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#tab-toplu-indirim" type="button" @onclick='() => _activeTab = "toplu-indirim"'>Toplu Alım İndirimi</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "grup-fiyat" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#tab-grup-fiyat" type="button" @onclick='() => _activeTab = "grup-fiyat"'>Müşteri Grubu Fiyatları</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "ozellikler" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#tab-ozellikler" type="button" @onclick='() => _activeTab = "ozellikler"'>Özellikler</button>
+            </li>
+        }
+    </ul>
+
+    <div class="tab-content">
+    <div class="tab-pane @(_activeTab == "urun" ? "show active" : "")" id="tab-urun">
     <div class="row" style="max-width: 900px;">
         <div class="col-md-6">
             <div class="mb-2">
@@ -211,12 +250,11 @@ else
 
     <button class="btn btn-success mt-3" @onclick="SaveAsync">Kaydet</button>
     <a class="btn btn-secondary ms-2 mt-3" href="/admin/ecommerce/products">Vazgeç</a>
+    </div>
 
     @if (!IsNew)
     {
-        <hr class="mt-4" />
-        <h4>Görseller</h4>
-
+        <div class="tab-pane @(_activeTab == "gorseller" ? "show active" : "")" id="tab-gorseller">
         <InputFile OnChange="UploadImageAsync" accept="image/*" class="form-control mb-3" style="max-width: 400px;" />
         @if (_uploadingImage)
         {
@@ -247,8 +285,8 @@ else
             }
         </div>
 
-        <hr class="mt-4" />
-        <h4>Videolar</h4>
+        </div>
+        <div class="tab-pane @(_activeTab == "videolar" ? "show active" : "")" id="tab-videolar">
         <p class="text-muted">Ör. YouTube/Vimeo bağlantısı - ürün tanıtım videosu.</p>
 
         <div class="card">
@@ -287,8 +325,8 @@ else
             <p class="text-danger mt-1">@_videoError</p>
         }
 
-        <hr class="mt-4" />
-        <h4>İlgili Ürünler</h4>
+        </div>
+        <div class="tab-pane @(_activeTab == "ilgili" ? "show active" : "")" id="tab-ilgili">
         <p class="text-muted">Ürün detay sayfasında "Benzer Ürünler" olarak gösterilir (yalnızca Aktif olanlar).</p>
 
         <div class="card">
@@ -333,8 +371,8 @@ else
             <p class="text-danger mt-1">@_relatedProductError</p>
         }
 
-        <hr class="mt-4" />
-        <h4>Varyantlar</h4>
+        </div>
+        <div class="tab-pane @(_activeTab == "varyantlar" ? "show active" : "")" id="tab-varyantlar">
         <p class="text-muted">Ör. farklı ölçü/renk seçenekleri için ayrı SKU, fiyat farkı ve stok.</p>
 
         <div class="card">
@@ -388,8 +426,8 @@ else
             <p class="text-danger mt-1">@_variantError</p>
         }
 
-        <hr class="mt-4" />
-        <h4>Toplu Alım İndirimi</h4>
+        </div>
+        <div class="tab-pane @(_activeTab == "toplu-indirim" ? "show active" : "")" id="tab-toplu-indirim">
         <p class="text-muted">Ör. "10 adet ve üzeri" alımlarda birim fiyatı sabit bir tutara indirir.</p>
 
         <div class="card">
@@ -428,8 +466,8 @@ else
             <p class="text-danger mt-1">@_quantityDiscountError</p>
         }
 
-        <hr class="mt-4" />
-        <h4>Müşteri Grubu Fiyatları</h4>
+        </div>
+        <div class="tab-pane @(_activeTab == "grup-fiyat" ? "show active" : "")" id="tab-grup-fiyat">
         <p class="text-muted">
             Belirli bir müşteri grubuna özel fiyat (bkz. plan §2.6 - B2B/B2C farklı fiyatlandırma).
             Boş bırakılıp kaydedilirse o grup için özel fiyat kaldırılır, taban fiyat gösterilir.
@@ -463,8 +501,8 @@ else
             <p class="text-danger mt-1">@_groupPriceError</p>
         }
 
-        <hr class="mt-4" />
-        <h4>Özellikler (Spesifikasyonlar)</h4>
+        </div>
+        <div class="tab-pane @(_activeTab == "ozellikler" ? "show active" : "")" id="tab-ozellikler">
         <p class="text-muted">Ör. "Malzeme: Pamuk", "Renk: Kırmızı" - fiyatı/stoku ETKİLEMEZ, yalnızca ürün sayfasında bilgi amaçlı gösterilir.</p>
 
         <div class="card">
@@ -516,11 +554,14 @@ else
         {
             <p class="text-danger mt-1">@_attributeError</p>
         }
+        </div>
     }
+    </div>
 }
 
 @code {
     private string _editingLanguageCode = "tr";
+    private string _activeTab = "urun";
 
     [Parameter]
     public Guid? Id { get; set; }
