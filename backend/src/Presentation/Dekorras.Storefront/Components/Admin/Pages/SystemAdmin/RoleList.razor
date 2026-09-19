@@ -18,6 +18,14 @@
     <a href="/admin/system/admins">Yöneticiler</a> sayfasından bir veya daha fazla rol atanır.
 </p>
 
+@if (_roleActionError is not null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        @_roleActionError
+        <button type="button" class="btn-close" @onclick="() => _roleActionError = null"></button>
+    </div>
+}
+
 @if (_roles is null || _permissions is null)
 {
     <p>Yükleniyor...</p>
@@ -26,9 +34,45 @@ else
 {
     @foreach (var role in _roles)
     {
+        var isSysAdmin = role.Name == "SysAdmin";
         <div class="card mb-3">
             <div class="card-body">
-                <h5 class="card-title">@role.Name</h5>
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                    @if (_renamingRoleId == role.Id)
+                    {
+                        <div class="d-flex align-items-center gap-2">
+                            <input class="form-control form-control-sm" style="width: 220px;" @bind="_renameText" />
+                            <button class="btn btn-sm btn-success" @onclick="() => SaveRenameAsync(role.Id)">Kaydet</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="CancelRename">Vazgeç</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <h5 class="card-title mb-0">@role.Name</h5>
+                    }
+
+                    @* "SysAdmin" - kendi RBAC'ını yönetebilme yetkisi bu isme bağlı olduğu için hem
+                       silme hem yeniden adlandırma UI'dan da GİZLENİR (yalnızca sunucu tarafında
+                       DEĞİL - kullanıcı bu butonların hiç var olmadığını görsün, "neden çalışmıyor"
+                       diye uğraşmasın). *@
+                    @if (!isSysAdmin && _renamingRoleId != role.Id)
+                    {
+                        <div class="d-flex align-items-center gap-1">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartRename(role)">Yeniden Adlandır</button>
+                            @if (_confirmingDeleteRoleId == role.Id)
+                            {
+                                <span class="small text-danger ms-1">Emin misiniz?</span>
+                                <button class="btn btn-sm btn-danger" @onclick="() => DeleteRoleAsync(role.Id)">Evet, Sil</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _confirmingDeleteRoleId = null">Vazgeç</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => _confirmingDeleteRoleId = role.Id">Sil</button>
+                            }
+                        </div>
+                    }
+                </div>
+
                 @foreach (var permission in _permissions)
                 {
                     var granted = role.PermissionIds.Contains(permission.Id);
@@ -46,6 +90,11 @@ else
 @code {
     private IReadOnlyCollection<RoleDto>? _roles;
     private IReadOnlyCollection<PermissionDto>? _permissions;
+    private string? _roleActionError;
+
+    private Guid? _renamingRoleId;
+    private string _renameText = "";
+    private Guid? _confirmingDeleteRoleId;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -70,5 +119,53 @@ else
             await Sender.Send(new RevokePermissionCommand(roleId, permissionId, actingId));
 
         await LoadAsync();
+    }
+
+    private void StartRename(RoleDto role)
+    {
+        _confirmingDeleteRoleId = null;
+        _roleActionError = null;
+        _renamingRoleId = role.Id;
+        _renameText = role.Name;
+    }
+
+    private void CancelRename()
+    {
+        _renamingRoleId = null;
+        _renameText = "";
+    }
+
+    private async Task SaveRenameAsync(Guid roleId)
+    {
+        _roleActionError = null;
+        try
+        {
+            var actingId = await GetActingIdentityUserIdAsync() ?? "";
+            await Sender.Send(new RenameRoleCommand(roleId, _renameText, actingId));
+            CancelRename();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FluentValidation.ValidationException)
+        {
+            _roleActionError = ex is FluentValidation.ValidationException vex
+                ? string.Join(" ", vex.Errors.Select(e => e.ErrorMessage))
+                : ex.Message;
+        }
+    }
+
+    private async Task DeleteRoleAsync(Guid roleId)
+    {
+        _roleActionError = null;
+        _confirmingDeleteRoleId = null;
+        try
+        {
+            var actingId = await GetActingIdentityUserIdAsync() ?? "";
+            await Sender.Send(new DeleteRoleCommand(roleId, actingId));
+            await LoadAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _roleActionError = ex.Message;
+        }
     }
 }

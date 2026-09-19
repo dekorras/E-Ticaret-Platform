@@ -2826,6 +2826,42 @@ kanıtlamak yalnızca gerçek bir tarayıcıda mümkün - bu oturumda tarayıcı
 komutun kendisi (asıl iş mantığı) yukarıdaki entegrasyon testiyle gerçek bir veritabanına karşı
 uçtan uca doğrulandı.
 
+## Roller Sayfasına Sil/Yeniden Adlandır Eklendi + GERÇEK Bir Veri Bütünlüğü Riski Bulundu
+
+Kullanıcı ekran görüntüsüyle Roller sayfasında oluşturulan bir rolü kaldırmanın veya adını
+değiştirmenin mümkün OLMADIĞINI fark etti (yalnızca izin onay kutuları vardı). İncelemede bu
+GERÇEKTEN eksikti: `RoleEdit.razor` yalnızca YENİ rol oluşturuyordu, `RoleList.razor`da rol
+başına yalnızca izin onay kutuları vardı - `DeleteRoleCommand`/`RenameRoleCommand` HİÇ yoktu.
+
+**Bu incelemede AYRICA gerçek bir veri bütünlüğü açığı bulundu:** `sys.foreign_keys` ile
+doğrulandı - `AdminProfileRole.RoleId`, `Role`e (`AppRoles` tablosuna) veritabanı düzeyinde
+HİÇBİR FK kısıtlaması TAŞIMIYOR (yalnızca `AdminProfileId`ye FK var). Yani veritabanının kendisi,
+hâlâ bir yöneticiye atanmış bir rolün silinmesini ENGELLEMEZ - bu kontrol MUTLAKA uygulama
+katmanında yapılmalıydı, aksi halde silinen role hâlâ atanmış yönetici hesapları "hayalet" bir
+RoleId ile kalır (ne hata verir ne düzgün çalışır, sessizce bozuk bir duruma düşer).
+
+**Uygulama:**
+- Yeni `RenameRoleCommand` ve `DeleteRoleCommand` (+ handler'lar, `Role.Rename(...)` domain
+  metodu eklendi). İkisi de "SysAdmin" rolünü KORUR (`InvalidOperationException` fırlatır) -
+  `AppUserClaimsPrincipalFactory` bu rolü TAM OLARAK bu string değeriyle (`r.Name == "SysAdmin"`)
+  eşleştirip taşıyıcısına tüm izinlerden bağımsız erişim veriyor; rol yeniden adlandırılır/silinirse
+  bu bypass mekanizması sessizce devre dışı kalır (son SysAdmin ise, panelin RBAC'ını yönetebilecek
+  KİMSE kalmaz). `DeleteRoleCommand` AYRICA yukarıdaki eksik FK'yı TELAFİ EDEN bir kontrol içerir:
+  rol hâlâ bir `AdminProfileRole` satırında referans alınıyorsa silme reddedilir, admin önce
+  "Yöneticiler" sayfasından rolü kaldırmaya yönlendirilir.
+- `RoleList.razor`: her rol kartına "Yeniden Adlandır" (inline metin kutusu + Kaydet/Vazgeç) ve
+  "Sil" (iki adımlı "Emin misiniz?" onayı, bu projede zaten yerleşik bir kalıp) eklendi - "SysAdmin"
+  kartında BU BUTONLAR HİÇ GÖRÜNMÜYOR (yalnızca sunucu tarafında engellemek yerine, kullanıcının
+  "neden çalışmıyor" diye uğraşmaması için UI'dan da gizlendi).
+- Yeni GERÇEK bir entegrasyon testi eklendi (`RbacRegressionTests.RolYenidenAdlandirilirVeSilinir_...`,
+  gerçek SQL Server'a karşı): SysAdmin'in yeniden adlandırılamadığını/silinemediğini, çakışan isme
+  yeniden adlandırmanın reddedildiğini, HÂLÂ bir yöneticiye atanmış bir rolün silinemediğini ama
+  rol kaldırıldıktan SONRA silinebildiğini, atanmamış bir rolün doğrudan silinebildiğini kanıtlıyor.
+
+**Doğrulama:** `dotnet build` 0 hata, `dotnet test` **140/140** yeşil (yeni entegrasyon testi
+dahil). Kestrel'de canlı HTTP ile: "Kullanıcı"/"Yönetici" kartlarında "Yeniden Adlandır"/"Sil"
+butonlarının render edildiği, "SysAdmin" kartında bu butonların HİÇ olmadığı doğrulandı.
+
 ## Sonraki fazlar (bkz. plan §13)
 
 Faz 0/1, Faz 2, Faz 3, Faz 4'ün akış/stok/kampanya dilimleri ve Faz 8 (Muhasebe) TAMAMLANDI. Content

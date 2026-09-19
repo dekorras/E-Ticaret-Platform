@@ -28,6 +28,79 @@ public sealed class CreateRoleCommandHandler(IUnitOfWork unitOfWork) : IRequestH
     }
 }
 
+/// <summary>
+/// "SysAdmin" adlı rol özel olarak korunur - hem burada (yeniden adlandırma) hem
+/// `DeleteRoleCommand`de (silme). `AppUserClaimsPrincipalFactory` bu rolü TAM OLARAK bu string
+/// değeriyle (`r.Name == "SysAdmin"`) eşleştirip taşıyıcısına TÜM izinlerden bağımsız erişim veren
+/// bir "sysadmin" claim'i ekler - rol yeniden adlandırılırsa veya silinirse bu bypass mekanizması
+/// SESSİZCE devre dışı kalır (son SysAdmin ise, panelin RBAC'ını yönetebilecek KİMSE kalmaz).
+/// </summary>
+public sealed record RenameRoleCommand(Guid RoleId, string NewName, string ActingIdentityUserId) : IRequest<Unit>;
+
+public sealed class RenameRoleCommandValidator : AbstractValidator<RenameRoleCommand>
+{
+    public RenameRoleCommandValidator() => RuleFor(x => x.NewName).NotEmpty().MaximumLength(100);
+}
+
+public sealed class RenameRoleCommandHandler(IUnitOfWork unitOfWork) : IRequestHandler<RenameRoleCommand, Unit>
+{
+    public async Task<Unit> Handle(RenameRoleCommand request, CancellationToken cancellationToken)
+    {
+        var repository = unitOfWork.Repository<Role>();
+        var role = await repository.GetByIdAsync(request.RoleId, cancellationToken)
+            ?? throw new KeyNotFoundException($"'{request.RoleId}' numaralı rol bulunamadı.");
+
+        if (role.Name == "SysAdmin")
+            throw new InvalidOperationException("'SysAdmin' rolü yeniden adlandırılamaz - panelin RBAC'ını yönetme yetkisi bu isme bağlıdır.");
+
+        if (repository.Query().Any(r => r.Id != request.RoleId && r.Name == request.NewName))
+            throw new InvalidOperationException($"'{request.NewName}' adlı bir rol zaten var.");
+
+        role.Rename(request.NewName);
+
+        await unitOfWork.Repository<AuditLog>().AddAsync(new AuditLog(
+            request.ActingIdentityUserId, "Role.Renamed", nameof(Role), role.Id.ToString(), request.NewName), cancellationToken);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Unit.Value;
+    }
+}
+
+/// <summary>
+/// "SysAdmin" silinemez (bkz. RenameRoleCommand'daki AYNI gerekçe). AYRICA: `AdminProfileRole.RoleId`
+/// bilinçli olarak (ya da bir gözden kaçma sonucu) `Role`e GERÇEK bir veritabanı FK KISITLAMASI
+/// TAŞIMIYOR (bkz. backend/README.md - `sys.foreign_keys` ile doğrulandı, yalnızca AdminProfileId'ye
+/// FK var). Yani veritabanının kendisi, hâlâ bir yöneticiye atanmış bir rolün silinmesini
+/// ENGELLEMEZ - bu kontrol BURADA, uygulama katmanında yapılmalı, aksi halde silinen role hâlâ
+/// atanmış yönetici hesapları "hayalet" bir RoleId ile kalır (ne hata verir ne de düzgün çalışır).
+/// </summary>
+public sealed record DeleteRoleCommand(Guid RoleId, string ActingIdentityUserId) : IRequest<Unit>;
+
+public sealed class DeleteRoleCommandHandler(IUnitOfWork unitOfWork) : IRequestHandler<DeleteRoleCommand, Unit>
+{
+    public async Task<Unit> Handle(DeleteRoleCommand request, CancellationToken cancellationToken)
+    {
+        var roleRepository = unitOfWork.Repository<Role>();
+        var role = await roleRepository.GetByIdAsync(request.RoleId, cancellationToken)
+            ?? throw new KeyNotFoundException($"'{request.RoleId}' numaralı rol bulunamadı.");
+
+        if (role.Name == "SysAdmin")
+            throw new InvalidOperationException("'SysAdmin' rolü silinemez - bu rol, yönetim panelinin kendisini yönetebilme yetkisini taşır.");
+
+        var isAssignedToAnyAdmin = unitOfWork.Repository<AdminProfileRole>().Query().Any(ar => ar.RoleId == request.RoleId);
+        if (isAssignedToAnyAdmin)
+            throw new InvalidOperationException("Bu rol hâlâ bir veya daha fazla yöneticiye atanmış - silmeden önce 'Yöneticiler' sayfasından bu rolü tüm kullanıcılardan kaldırın.");
+
+        await unitOfWork.Repository<AuditLog>().AddAsync(new AuditLog(
+            request.ActingIdentityUserId, "Role.Deleted", nameof(Role), role.Id.ToString(), role.Name), cancellationToken);
+
+        roleRepository.Remove(role);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Unit.Value;
+    }
+}
+
 public sealed record GrantPermissionCommand(Guid RoleId, Guid PermissionId, string ActingIdentityUserId) : IRequest<Unit>;
 
 public sealed class GrantPermissionCommandHandler(IUnitOfWork unitOfWork) : IRequestHandler<GrantPermissionCommand, Unit>

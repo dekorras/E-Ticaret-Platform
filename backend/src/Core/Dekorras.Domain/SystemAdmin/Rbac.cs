@@ -59,6 +59,8 @@ public class Role : AuditableEntity
 
     public Role(string name) => Name = name;
 
+    public void Rename(string name) => Name = name;
+
     public void Grant(Guid permissionId)
     {
         if (_permissions.Any(p => p.PermissionId == permissionId)) return;

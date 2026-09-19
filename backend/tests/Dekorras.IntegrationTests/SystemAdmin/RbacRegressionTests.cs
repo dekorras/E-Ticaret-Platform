@@ -108,4 +108,59 @@ public sealed class RbacRegressionTests : IAsyncLifetime
         Assert.Contains(auditLog, a => a.Action == "AdminProfile.RoleAssigned");
         Assert.Contains(auditLog, a => a.Action == "AdminProfile.RoleRevoked");
     }
+
+    /// <summary>Kullanıcının ekran görüntüsüyle bulduğu gerçek eksiklik - Roller sayfasında rol
+    /// silme/yeniden adlandırma HİÇ yoktu. Bu test hem YENİ komutların doğru çalıştığını hem de
+    /// GERÇEK bir veri bütünlüğü riskini kanıtlar: `AdminProfileRole.RoleId`nin `Role`e veritabanı
+    /// düzeyinde bir FK KISITLAMASI YOK (bkz. backend/README.md) - yani veritabanının KENDİSİ, hâlâ
+    /// bir yöneticiye atanmış bir rolün silinmesini ENGELLEMEZ; bu kontrolün uygulama katmanında
+    /// (DeleteRoleCommandHandler) doğru çalıştığı burada doğrulanır.</summary>
+    [Fact]
+    public async Task RolYenidenAdlandirilirVeSilinir_SysAdminKorunurVeAtanmisRolSilinemez()
+    {
+        await using var dbContext = CreateDbContext();
+        var unitOfWork = new UnitOfWork(dbContext);
+
+        var sysAdminRoleId = await new CreateRoleCommandHandler(unitOfWork).Handle(new CreateRoleCommand("SysAdmin"), CancellationToken.None);
+        var unassignedRoleId = await new CreateRoleCommandHandler(unitOfWork).Handle(new CreateRoleCommand("Geçici Rol"), CancellationToken.None);
+        var assignedRoleId = await new CreateRoleCommandHandler(unitOfWork).Handle(new CreateRoleCommand("Muhasebeci"), CancellationToken.None);
+
+        // --- SysAdmin korumaları ---
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new RenameRoleCommandHandler(unitOfWork)
+            .Handle(new RenameRoleCommand(sysAdminRoleId, "SuperAdmin", "acting-user-1"), CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new DeleteRoleCommandHandler(unitOfWork)
+            .Handle(new DeleteRoleCommand(sysAdminRoleId, "acting-user-1"), CancellationToken.None));
+
+        // --- Yeniden adlandırma: başarılı + çakışan isim reddedilir ---
+        await new RenameRoleCommandHandler(unitOfWork).Handle(new RenameRoleCommand(unassignedRoleId, "Kalıcı Rol", "acting-user-1"), CancellationToken.None);
+        var rolesAfterRename = await new GetRolesQueryHandler(unitOfWork).Handle(new GetRolesQuery(), CancellationToken.None);
+        Assert.Equal("Kalıcı Rol", rolesAfterRename.Single(r => r.Id == unassignedRoleId).Name);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new RenameRoleCommandHandler(unitOfWork)
+            .Handle(new RenameRoleCommand(unassignedRoleId, "Muhasebeci", "acting-user-1"), CancellationToken.None));
+
+        // --- Atanmış bir rol silinemez ---
+        var profileId = await new CreateAdminProfileCommandHandler(unitOfWork).Handle(
+            new CreateAdminProfileCommand("identity-rbac-delete-1", "Test Yöneticisi 2", "acting-user-1"), CancellationToken.None);
+        await new AssignRoleToAdminCommandHandler(unitOfWork).Handle(new AssignRoleToAdminCommand(profileId, assignedRoleId, "acting-user-1"), CancellationToken.None);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new DeleteRoleCommandHandler(unitOfWork)
+            .Handle(new DeleteRoleCommand(assignedRoleId, "acting-user-1"), CancellationToken.None));
+
+        // Rol kaldırıldıktan SONRA artık silinebilmeli.
+        await new RevokeRoleFromAdminCommandHandler(unitOfWork).Handle(new RevokeRoleFromAdminCommand(profileId, assignedRoleId, "acting-user-1"), CancellationToken.None);
+        await new DeleteRoleCommandHandler(unitOfWork).Handle(new DeleteRoleCommand(assignedRoleId, "acting-user-1"), CancellationToken.None);
+
+        // --- Atanmamış bir rol doğrudan silinebilir ---
+        await new DeleteRoleCommandHandler(unitOfWork).Handle(new DeleteRoleCommand(unassignedRoleId, "acting-user-1"), CancellationToken.None);
+
+        var rolesAfterDeletes = await new GetRolesQueryHandler(unitOfWork).Handle(new GetRolesQuery(), CancellationToken.None);
+        Assert.DoesNotContain(rolesAfterDeletes, r => r.Id == assignedRoleId);
+        Assert.DoesNotContain(rolesAfterDeletes, r => r.Id == unassignedRoleId);
+        Assert.Contains(rolesAfterDeletes, r => r.Id == sysAdminRoleId); // hiç dokunulmadı
+
+        var auditLog = await new GetAuditLogQueryHandler(unitOfWork).Handle(new GetAuditLogQuery(), CancellationToken.None);
+        Assert.Contains(auditLog, a => a.Action == "Role.Renamed");
+        Assert.Contains(auditLog, a => a.Action == "Role.Deleted");
+    }
 }
