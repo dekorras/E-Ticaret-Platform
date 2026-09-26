@@ -117,10 +117,41 @@ public sealed record SetUserRoomMaskCommand(string OwnerKey, Guid SceneId, Strea
 /// <summary>Kullanıcının kendi sahnesini siler (hazır sahnelere dokunulamaz).</summary>
 public sealed record DeleteUserRoomSceneCommand(string OwnerKey, Guid SceneId) : IRequest<Unit>;
 
+/// <summary>"Ayarları sıfırla": kendi odasındaki eşya işaretlemesini (ön plan maskesi) kaldırır; gölge haritası
+/// maskesiz yeniden üretilir.</summary>
+public sealed record ClearUserRoomMaskCommand(string OwnerKey, Guid SceneId) : IRequest<SceneDto>;
+
 public sealed class UserRoomSceneCommandHandler(IUnitOfWork unitOfWork, IImageDerivativeService images, IWallImageStore store, IWallRenderCache renderCache) :
     IRequestHandler<SetUserRoomMaskCommand, SceneDto>,
+    IRequestHandler<ClearUserRoomMaskCommand, SceneDto>,
     IRequestHandler<DeleteUserRoomSceneCommand, Unit>
 {
+    public async Task<SceneDto> Handle(ClearUserRoomMaskCommand request, CancellationToken cancellationToken)
+    {
+        var scene = Owned(request.OwnerKey, request.SceneId);
+        if (scene.ForegroundMaskUrl is null) return GetRoomScenesQueryHandler.ToDto(scene);
+
+        var shadowUrl = await RegenerateShadowAsync(scene, null, DateTime.UtcNow.Ticks.ToString("x"), cancellationToken);
+        await store.DeletePublicAsync(scene.ForegroundMaskUrl, cancellationToken);
+        scene.SetImages(scene.BaseImageUrl, scene.ImageWidthPx, scene.ImageHeightPx, shadowUrl, null);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await renderCache.InvalidateAsync($"scene:{scene.Id}", cancellationToken);
+        return GetRoomScenesQueryHandler.ToDto(scene);
+    }
+
+    /// <summary>Gölge haritasını (işaretli eşyalar hariç) yeniden üretir; eskisini siler, yeni URL'yi döner.</summary>
+    private async Task<string?> RegenerateShadowAsync(RoomScene scene, byte[]? maskPng, string stamp, CancellationToken cancellationToken)
+    {
+        await using var photo = store.OpenPublic(scene.BaseImageUrl);
+        if (photo is null) return scene.ShadowMapUrl;
+        using var photoBytes = new MemoryStream();
+        await photo.CopyToAsync(photoBytes, cancellationToken);
+        var shadow = await images.CreateShadowMapAsync(photoBytes.ToArray(), scene.WallQuad, maskPng, cancellationToken);
+        var url = await store.SavePublicAsync(scene.BaseImageUrl.Replace("/uploads/", "").Replace(".jpg", $"-shadow-{stamp}.png"), shadow, cancellationToken);
+        if (scene.ShadowMapUrl is not null) await store.DeletePublicAsync(scene.ShadowMapUrl, cancellationToken);
+        return url;
+    }
+
     public async Task<SceneDto> Handle(SetUserRoomMaskCommand request, CancellationToken cancellationToken)
     {
         var scene = Owned(request.OwnerKey, request.SceneId);
@@ -142,18 +173,7 @@ public sealed class UserRoomSceneCommandHandler(IUnitOfWork unitOfWork, IImageDe
         if (scene.ForegroundMaskUrl is not null) await store.DeletePublicAsync(scene.ForegroundMaskUrl, cancellationToken);
 
         // Gölge haritası işaretli eşyalar HARİÇ yeniden üretilir (eşya posterin üstüne koyu leke olarak yayılmasın).
-        var shadowUrl = scene.ShadowMapUrl;
-        await using (var photo = store.OpenPublic(scene.BaseImageUrl))
-        {
-            if (photo is not null)
-            {
-                using var photoBytes = new MemoryStream();
-                await photo.CopyToAsync(photoBytes, cancellationToken);
-                var shadow = await images.CreateShadowMapAsync(photoBytes.ToArray(), scene.WallQuad, png, cancellationToken);
-                shadowUrl = await store.SavePublicAsync(scene.BaseImageUrl.Replace("/uploads/", "").Replace(".jpg", $"-shadow-{stamp}.png"), shadow, cancellationToken);
-                if (scene.ShadowMapUrl is not null) await store.DeletePublicAsync(scene.ShadowMapUrl, cancellationToken);
-            }
-        }
+        var shadowUrl = await RegenerateShadowAsync(scene, png, stamp, cancellationToken);
         scene.SetImages(scene.BaseImageUrl, scene.ImageWidthPx, scene.ImageHeightPx, shadowUrl, url);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await renderCache.InvalidateAsync($"scene:{scene.Id}", cancellationToken);

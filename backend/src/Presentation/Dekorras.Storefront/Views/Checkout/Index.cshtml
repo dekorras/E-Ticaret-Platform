@@ -102,7 +102,7 @@
                         </li>
                     }
                 </ul>
-                <p class="mt-2">Ara Toplam: @Html.Money(cart.SubTotalTry)</p>
+                <p class="mt-2">Ara Toplam (KDV hariç): @Html.Money(cart.SubTotalTry)</p>
                 @if (cart.GlueDiscountTry > 0)
                 {
                     <p class="text-success">Ücretsiz tutkal: -@Html.Money(cart.GlueDiscountTry)</p>
@@ -115,11 +115,12 @@
                 {
                     <p class="text-success">Kampanya (<span class="fst-italic">@cart.CampaignName</span>): -@Html.Money(cart.DiscountTry)</p>
                 }
+                <p data-checkout-tax>KDV: @Html.Money(cart.TaxTotalTry)</p>
                 @if (cart.GiftVoucherCode is not null)
                 {
                     <p class="text-success">Hediye Çeki (<code>@cart.GiftVoucherCode</code>): -@Html.Money(cart.GiftVoucherAmountAppliedTry)</p>
                 }
-                <p class="fw-bold">Toplam (kargo hariç): @Html.Money(cart.GrandTotalTry)</p>
+                <p class="fw-bold">Toplam (KDV dahil, kargo hariç): @Html.Money(cart.GrandTotalTry)</p>
                 @if (cart.FreeShipping)
                 {
                     <p class="small text-success">Siparişinizde kargo ücretsiz.</p>

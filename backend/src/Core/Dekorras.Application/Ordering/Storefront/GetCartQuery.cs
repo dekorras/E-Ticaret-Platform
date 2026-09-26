@@ -41,7 +41,9 @@ public sealed class GetCartQueryHandler(IUnitOfWork unitOfWork) : IRequestHandle
                         i.Quantity,
                         i.UnitPriceTry * i.Quantity,
                         i.Id,
-                        null),
+                        null,
+                        false,
+                        p.TaxRatePercentage),
                     i.ConfigurationJson,
                     i.PriceSnapshotJson,
                 })
@@ -75,6 +77,18 @@ public sealed class GetCartQueryHandler(IUnitOfWork unitOfWork) : IRequestHandle
         }
 
         var glueSuggestions = BuildGlueSuggestions(items, glueProductIds, subTotal - glueLines.Sum(i => i.LineTotalTry), settings);
+
+        // KDV: PlaceOrderCommand/Order.Recalculate ile AYNI kural - her satır kendi oranıyla, indirimden ÖNCE;
+        // ücretsiz verilen tutkal adetleri siparişte 0 ₺'lik ayrı satır olduğu için KDV'siz.
+        var taxTotal = items.Where(i => !i.RequiresConfiguration).Sum(i => i.LineTotalTry * i.TaxRatePercentage / 100m);
+        var freeGlueLeft = CartTotalsCalculator.GlueFreeUnits(subTotal - glueLines.Sum(i => i.LineTotalTry), glueDemand, glueLines.Sum(i => i.Quantity), settings.GlueFreeThresholdTry);
+        foreach (var glueLine in glueLines)
+        {
+            var free = Math.Min(freeGlueLeft, glueLine.Quantity);
+            taxTotal -= free * glueLine.UnitPriceTry * glueLine.TaxRatePercentage / 100m;
+            freeGlueLeft -= free;
+        }
+        taxTotal = Math.Round(taxTotal, 2, MidpointRounding.AwayFromZero);
 
         var discountBase = subTotal - glueDiscount;
         var discount = 0m;
@@ -110,20 +124,22 @@ public sealed class GetCartQueryHandler(IUnitOfWork unitOfWork) : IRequestHandle
         // PlaceOrderCommand'da uygulanır.
         var giftVoucherAmountApplied = 0m;
         var totalAfterDiscount = discountBase - discount;
-        if (cart.GiftVoucherCode is not null && totalAfterDiscount > 0)
+        var payable = totalAfterDiscount + taxTotal; // KDV dahil (kargo ödeme adımında eklenir)
+        if (cart.GiftVoucherCode is not null && payable > 0)
         {
             var giftVoucher = unitOfWork.Repository<GiftVoucher>().Query().FirstOrDefault(v => v.Code == cart.GiftVoucherCode);
             if (giftVoucher is not null && giftVoucher.IsUsable())
-                giftVoucherAmountApplied = Math.Min(giftVoucher.RemainingBalanceTry, totalAfterDiscount);
+                giftVoucherAmountApplied = Math.Min(giftVoucher.RemainingBalanceTry, payable);
         }
 
         return Task.FromResult(new CartDto(
-            cart.Id, items, subTotal, cart.CouponCode, discount, totalAfterDiscount - giftVoucherAmountApplied,
+            cart.Id, items, subTotal, cart.CouponCode, discount, payable - giftVoucherAmountApplied,
             campaignName, cart.GiftVoucherCode, giftVoucherAmountApplied,
             GlueDiscountTry: glueDiscount,
             FreeShippingRemainingTry: settings.FreeShippingThresholdTry is decimal threshold ? Math.Max(0m, threshold - totalAfterDiscount) : null,
             FreeShipping: CartTotalsCalculator.IsFreeShipping(totalAfterDiscount, settings.FreeShippingThresholdTry),
-            GlueSuggestions: glueSuggestions));
+            GlueSuggestions: glueSuggestions,
+            TaxTotalTry: taxTotal));
     }
 
     /// <summary>Verilen (ölçüsüz satırlardaki) ürünlerden ölçüye özel konfigüre edilebilir olanlar.</summary>

@@ -161,6 +161,18 @@ public sealed class VisualizerCategoryCropMaskTests(StorefrontFixture fx)
             }
             await page.WaitForTimeoutAsync(800);
             await page.ScreenshotAsync(new() { Path = Path.Combine(ScreenshotDir, "koltuk-onunde.png") });
+
+            // "Ayarları sıfırla" kendi odasındaki eşya işaretlemesini de (onayla) siler; gölge haritası yenilenir.
+            string? dialogText = null;
+            page.Dialog += async (_, d) => { dialogText = d.Message; await d.AcceptAsync(); };
+            var shadowBefore = mine.GetProperty("shadowMapUrl").GetString();
+            await page.Locator("[data-viz-reset]").ClickAsync();
+            await Assertions.Expect(page.Locator("#wallToast")).ToContainTextAsync("eşya işaretlemesi sıfırlandı");
+            Assert.Contains("işaretleme de silinecek", dialogText);
+            var afterReset = JsonDocument.Parse(await (await context.APIRequest.GetAsync($"{fx.BaseUrl}/api/v1/scenes")).TextAsync()).RootElement
+                .EnumerateArray().Single(s => s.GetProperty("isUserScene").GetBoolean());
+            Assert.Equal(JsonValueKind.Null, afterReset.GetProperty("foregroundMaskUrl").ValueKind);
+            Assert.NotEqual(shadowBefore, afterReset.GetProperty("shadowMapUrl").GetString());
         }
         finally
         {

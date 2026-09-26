@@ -928,11 +928,30 @@
         // ---------- Ayarları sıfırla ----------
         // Müşteri beğenmediği denemeyi tek tıkla başa alır: ölçü (varsayılan, cm), ilk malzeme, kırp + varsayılan
         // (ortalanmış) baskı alanı, aynasız, filtresiz, ortalı, panel çizgisiz, yakınlaştırmasız. Oda (sahne) ve ürün
-        // korunur; kendi odasındaki eşya işaretlemesi silinmez (o ayrı düğmeyle düzenlenir).
+        // korunur. Kendi odasındaysa "Duvarın önündeki eşyaları işaretle" ile yapılan işaretleme de (onayla) silinir.
         function checkRadio(attr, value) {
             root.querySelectorAll('[' + attr + ']').forEach(function (r) { r.checked = r.value === value; });
         }
+        function clearRoomMask(s) {
+            var tokenInput = root.querySelector('input[name="__RequestVerificationToken"]') || document.querySelector('input[name="__RequestVerificationToken"]');
+            return fetch('/api/v1/room-previews/' + s.id + '/mask', {
+                method: 'DELETE',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', RequestVerificationToken: tokenInput ? tokenInput.value : '' }
+            }).then(function (r) {
+                if (!r.ok) throw new Error(r.status === 429 ? 'Çok sık işlem yaptınız; lütfen biraz sonra tekrar deneyin.' : 'Eşya işaretlemesi silinemedi.');
+                return r.json();
+            }).then(function (updated) {
+                scenesById[updated.id] = updated;
+                data.scenes = data.scenes.map(function (x) { return x.id === updated.id ? updated : x; });
+                sceneLayers = null; // yeni (maskesiz) katmanlar yüklensin
+                return refresh();
+            });
+        }
         function resetAll() {
+            var current = scene();
+            var hasMask = !!(current && current.isUserScene && current.foregroundMaskUrl);
+            if (hasMask && !window.confirm('Ayarlar sıfırlanacak ve bu odada "Duvarın önündeki eşyaları işaretle" ile yaptığınız işaretleme de silinecek. Devam edilsin mi?')) return;
             var d = data.defaults || {};
             clearTimeout(dimTimer); dimTimer = null;
             state.unit = 'cm';
@@ -958,7 +977,10 @@
             zoom.s = 1; applyZoom();
             errorBox.textContent = '';
             changed();
-            toast('Ayarlar sıfırlandı; yeniden deneyebilirsiniz.');
+            if (!hasMask) { toast('Ayarlar sıfırlandı; yeniden deneyebilirsiniz.'); return; }
+            clearRoomMask(current)
+                .then(function () { toast('Ayarlar ve eşya işaretlemesi sıfırlandı; yeniden deneyebilirsiniz.'); })
+                .catch(function (e) { toast(e.message, true); });
         }
         var resetBtn = root.querySelector('[data-viz-reset]');
         if (resetBtn) resetBtn.addEventListener('click', resetAll);

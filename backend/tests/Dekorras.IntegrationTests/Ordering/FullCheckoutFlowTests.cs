@@ -250,7 +250,8 @@ public sealed class FullCheckoutFlowTests : IAsyncLifetime
         var cartPreview = await sender.Send(new GetCartQuery(sessionKey, "tr"));
         Assert.Equal("TEST10", cartPreview.CouponCode);
         Assert.Equal(50m, cartPreview.DiscountTry); // 500 TRY'nin %10'u
-        Assert.Equal(450m, cartPreview.GrandTotalTry);
+        Assert.Equal(100m, cartPreview.TaxTotalTry); // KDV indirim öncesi taban üzerinden (siparişle aynı)
+        Assert.Equal(550m, cartPreview.GrandTotalTry); // KDV dahil, kargo hariç: 500 - 50 + 100 (sipariş 565 - 15 kargo)
 
         var placeOrderResult = await sender.Send(new PlaceOrderCommand(
             sessionKey, IdentityUserId: null, "Kupon Müşterisi", "kupon@test.com", "5551112233",
@@ -599,7 +600,7 @@ public sealed class FullCheckoutFlowTests : IAsyncLifetime
         var cartPreview = await sender.Send(new GetCartQuery(sessionKey, "tr"));
         Assert.Equal("Önizleme Kampanyası", cartPreview.CampaignName);
         Assert.Equal(50m, cartPreview.DiscountTry); // 500 TRY'nin %10'u
-        Assert.Equal(450m, cartPreview.GrandTotalTry);
+        Assert.Equal(550m, cartPreview.GrandTotalTry); // KDV dahil: 500 - 50 + 100 KDV
 
         // Bir kupon uygulanınca önizleme kampanyayı GÖSTERMEMELİ (mutually exclusive - bkz. Campaign belgesi).
         await sender.Send(new Dekorras.Application.Ordering.Commands.CreateCouponCommand(
@@ -693,12 +694,12 @@ public sealed class FullCheckoutFlowTests : IAsyncLifetime
         await sender.Send(new ApplyCouponCommand(sessionKey, "hediyecek10"));
         await sender.Send(new ApplyGiftVoucherCommand(sessionKey, "hediyecek100"));
 
-        // Sepet önizlemesi: 500 - %10 kupon (50) = 450, sonra 100 TRY hediye çeki düşülür = 350.
+        // Sepet önizlemesi (KDV dahil): 500 - %10 kupon (50) + 100 KDV = 550, sonra 100 TRY hediye çeki düşülür = 450.
         var cartPreview = await sender.Send(new GetCartQuery(sessionKey, "tr"));
         Assert.Equal("HEDIYECEK10", cartPreview.CouponCode);
         Assert.Equal("HEDIYECEK100", cartPreview.GiftVoucherCode);
         Assert.Equal(100m, cartPreview.GiftVoucherAmountAppliedTry);
-        Assert.Equal(350m, cartPreview.GrandTotalTry);
+        Assert.Equal(450m, cartPreview.GrandTotalTry); // KDV dahil: 500 - 50 + 100 KDV - 100 hediye çeki (sipariş 465 - 15 kargo)
 
         var placeOrderResult = await sender.Send(new PlaceOrderCommand(
             sessionKey, IdentityUserId: null, "Hediye Çeki Müşterisi", "hediyecek@test.com", "5551112233",

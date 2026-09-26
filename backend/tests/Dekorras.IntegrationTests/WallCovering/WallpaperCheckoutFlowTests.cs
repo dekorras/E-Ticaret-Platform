@@ -200,6 +200,37 @@ public sealed class WallpaperCheckoutFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SepetKdvVeToplami_SiparisleBirebirAynidir_UcretsizTutkalKdvsiz()
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var f = await ArrangeCatalogAsync(sender, dbContext);
+        var sessionKey = Guid.NewGuid().ToString("N");
+
+        // 400×200 Dokusuz = 5803,45 (tutkal gerektirir, 1 adet) + 2 tutkal × 150 (1'i ücretsiz: eşik 1000 aşıldı).
+        await sender.Send(new AddConfiguredCartItemCommand(sessionKey, f.ProductId, new WallConfiguration(400m, 200m, "plain"), 1));
+        await sender.Send(new AddCartItemCommand(sessionKey, f.GlueProductId, Quantity: 2));
+
+        var cart = await sender.Send(new GetCartQuery(sessionKey, "tr"));
+        Assert.Equal(6103.45m, cart.SubTotalTry);                       // KDV hariç
+        Assert.Equal(150m, cart.GlueDiscountTry);
+        Assert.Equal(1190.69m, cart.TaxTotalTry);                       // (5803,45 + 150) × %20 - ücretsiz tutkal KDV'siz
+        Assert.Equal(6103.45m - 150m + 1190.69m, cart.GrandTotalTry);   // KDV dahil, kargo hariç
+        Assert.All(cart.Items, i => Assert.Equal(20m, i.TaxRatePercentage));
+
+        var result = await sender.Send(new PlaceOrderCommand(
+            sessionKey, IdentityUserId: null, "Kdv Müşterisi", "kdv@dekorras.com", "5551234567", "TR", "Kayseri", "Adres 1",
+            "bank-transfer", "yurtici-kargo"));
+        dbContext.ChangeTracker.Clear();
+        var order = await dbContext.Orders.SingleAsync(o => o.Id == result.OrderId);
+
+        // Sepette gösterilen KDV ve toplam, oluşan siparişle (kargo hariç) kuruşu kuruşuna aynı.
+        Assert.Equal(cart.TaxTotalTry, Math.Round(order.TaxTotalTry, 2, MidpointRounding.AwayFromZero));
+        Assert.Equal(cart.GrandTotalTry, Math.Round(order.GrandTotalTry - order.ShippingTotalTry, 2, MidpointRounding.AwayFromZero));
+    }
+
+    [Fact]
     public async Task EskiOlcusuzDuvarKagidiSatiri_ToplamaKatilmaz_SipariseDonusturulemez()
     {
         using var scope = _serviceProvider.CreateScope();

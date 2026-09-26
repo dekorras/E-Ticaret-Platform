@@ -21,9 +21,9 @@ else
         <thead>
             <tr>
                 <th>@Localizer["Ürün"]</th>
-                <th>@Localizer["Birim Fiyat"]</th>
+                <th>@Localizer["Birim Fiyat (KDV hariç)"]</th>
                 <th>@Localizer["Adet"]</th>
-                <th>@Localizer["Ara Toplam"]</th>
+                <th>@Localizer["Tutar (KDV hariç)"]</th>
                 <th></th>
             </tr>
         </thead>
@@ -100,7 +100,7 @@ else
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="3" class="text-end">@Localizer["Ara Toplam"]</td>
+                <td colspan="3" class="text-end">@Localizer["Ara Toplam (KDV hariç)"]</td>
                 <td>@Html.Money(Model.SubTotalTry)</td>
                 <td></td>
             </tr>
@@ -134,6 +134,11 @@ else
                     <td></td>
                 </tr>
             }
+            <tr data-cart-tax>
+                <td colspan="3" class="text-end">@Localizer["KDV"]</td>
+                <td>@Html.Money(Model.TaxTotalTry)</td>
+                <td></td>
+            </tr>
             @if (Model.GiftVoucherCode is not null)
             {
                 <tr>
@@ -147,8 +152,8 @@ else
                 </tr>
             }
             <tr>
-                <td colspan="3" class="text-end fw-bold">@Localizer["Toplam"]</td>
-                <td class="fw-bold">@Html.Money(Model.GrandTotalTry)</td>
+                <td colspan="3" class="text-end fw-bold">@Localizer["Toplam (KDV dahil)"]</td>
+                <td class="fw-bold" data-cart-grand-total>@Html.Money(Model.GrandTotalTry)</td>
                 <td></td>
             </tr>
         </tfoot>

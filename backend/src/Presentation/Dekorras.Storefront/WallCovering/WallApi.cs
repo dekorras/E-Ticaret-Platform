@@ -240,6 +240,11 @@ public static class WallApi
             return Results.NoContent();
         });
 
+        // "Ayarları sıfırla": kendi odasındaki eşya işaretlemesini kaldırır (gölge haritası maskesiz yeniden üretilir).
+        api.MapDelete("/room-previews/{id:guid}/mask", async (Guid id, HttpContext http, ISender sender) =>
+            Results.Ok(await sender.Send(new ClearUserRoomMaskCommand(await WallVisitor.GetOwnerKeyAsync(http, sender), id))))
+            .RequireRateLimiting(RoomMaskRateLimitPolicy);
+
         api.MapGet("/room-previews/quota", async (HttpContext http, ISender sender) =>
             Results.Ok(await sender.Send(new GetRoomQuotaQuery(await WallVisitor.GetOwnerKeyAsync(http, sender)))));
     }
