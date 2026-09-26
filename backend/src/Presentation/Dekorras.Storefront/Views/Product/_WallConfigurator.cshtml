@@ -1,0 +1,204 @@
+@model WallConfiguratorModel
+@using System.Globalization
+@using Dekorras.Domain.WallCovering
+@{
+    var p = Model.Product;
+    var c = Model.Initial;
+    var q = Model.InitialQuote;
+    var unit = WallDimensions.UnitCode(c.Unit);
+    var inv = CultureInfo.InvariantCulture;
+    string Fmt(decimal cm) => WallDimensions.FromCm(cm, c.Unit).ToString("0.##", CultureInfo.GetCultureInfo("tr-TR"));
+    var isPattern = p.ProductType == "Pattern";
+    var errorMessage = TempData["WallError"] as string;
+}
+
+<script type="application/json" id="wallConfigData">@Html.Raw(Model.ToClientJson())</script>
+
+<div class="row g-4 wall-config" data-wall-configurator>
+    <div class="col-lg-7">
+        <div class="wall-view-switch mb-2" role="group" aria-label="Önizleme türü">
+            <button type="button" class="btn btn-sm btn-dark" aria-pressed="true" data-wall-view="flat"><i class="bi bi-image"></i> Düz görünüm</button>
+            <wall-preview-link product="@p.Slug" config="@c" variant="button" source="konfigurator" css-class="btn-sm" />
+        </div>
+
+        <div class="wall-stage" data-wall-stage style="--wall-ratio:@((c.WidthCm / c.HeightCm).ToString("0.####", inv))">
+            <canvas class="wall-canvas" data-wall-canvas role="img" aria-label="@p.Title - seçilen ölçüde canlı önizleme"></canvas>
+            @* JS yoksa/yüklenene kadar ürün görseli *@
+            @if (p.PreviewUrl is not null)
+            {
+                <img class="wall-stage-fallback" data-wall-fallback src="@p.PreviewUrl" alt="@p.Title" />
+            }
+            <div class="wall-crop-editor" data-wall-crop-editor hidden>
+                <img data-wall-crop-image alt="Kırpma alanı: @p.Title" />
+            </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center mt-2 small">
+            <span class="text-muted" data-wall-stage-caption>@c.WidthCm.ToString("0.#") × @c.HeightCm.ToString("0.#") cm · kesikli çizgiler panel ek yerleridir</span>
+            <label class="form-check form-switch ms-auto mb-0">
+                <input class="form-check-input" type="checkbox" data-wall-panel-lines checked />
+                <span class="form-check-label">Panel çizgileri</span>
+            </label>
+        </div>
+        <div class="alert alert-warning py-2 mt-2" data-wall-dpi hidden role="status"></div>
+
+        <h1 class="h3 mt-4">@p.Title</h1>
+        @if (p.Colors.Count > 0)
+        {
+            <div class="wall-card-colors mb-2">@foreach (var color in p.Colors) { <span class="wall-color-dot" style="background:@color" title="@color"></span> }</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(p.Description))
+        {
+            <div class="mt-2 text-body-secondary">@Html.Raw(p.Description)</div>
+        }
+    </div>
+
+    <div class="col-lg-5">
+        <form class="wall-form" method="post" asp-controller="Cart" asp-action="AddConfigured" data-wall-form novalidate>
+            <input type="hidden" name="productId" value="@p.ProductId" />
+            <input type="hidden" name="slug" value="@p.Slug" />
+            <input type="hidden" name="crop" value="@c.Crop?.ToQueryValue()" data-wall-crop-value />
+
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger py-2">@errorMessage</div>
+            }
+
+            <section class="wall-step" aria-labelledby="stepSize">
+                <h2 class="wall-step-title" id="stepSize"><span>1</span> Ölçü</h2>
+                <div class="d-flex gap-2 mb-2" role="radiogroup" aria-label="Ölçü birimi">
+                    @foreach (var (code, label) in new[] { ("cm", "cm"), ("m", "m"), ("in", "inç"), ("ft", "ft") })
+                    {
+                        <input type="radio" class="btn-check" name="unit" id="unit-@code" value="@code" checked="@(unit == code)" data-wall-unit />
+                        <label class="btn btn-sm btn-outline-secondary" for="unit-@code">@label</label>
+                    }
+                </div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label for="wallWidth" class="form-label small mb-1">En (<span data-wall-unit-label>@unit</span>)</label>
+                        <input id="wallWidth" name="width" class="form-control" inputmode="decimal" autocomplete="off" value="@Fmt(c.WidthCm)" data-wall-width aria-describedby="wallWidthError" required />
+                        <div class="invalid-feedback d-block" id="wallWidthError" data-wall-error="width"></div>
+                    </div>
+                    <div class="col-6">
+                        <label for="wallHeight" class="form-label small mb-1">Boy (<span data-wall-unit-label>@unit</span>)</label>
+                        <input id="wallHeight" name="height" class="form-control" inputmode="decimal" autocomplete="off" value="@Fmt(c.HeightCm)" data-wall-height aria-describedby="wallHeightError" required />
+                        <div class="invalid-feedback d-block" id="wallHeightError" data-wall-error="height"></div>
+                    </div>
+                </div>
+                <p class="mt-2 mb-0">Hesaplanan alan: <strong data-wall-area>@q.AlanM2.ToString("N2") m²</strong></p>
+                <p class="small text-muted mb-0" data-wall-bleed-info>Kesim/montaj için her ölçüye @(Model.SelectedMaterial?.BleedCm.ToString("0") ?? "5") cm pay ekliyoruz@(Model.Settings.ChargeBleed ? " (kesim payı fiyata dahildir)" : "").</p>
+            </section>
+
+            <section class="wall-step" aria-labelledby="stepMaterial">
+                <h2 class="wall-step-title" id="stepMaterial"><span>2</span> Malzeme</h2>
+                <div class="wall-materials" role="radiogroup" aria-labelledby="stepMaterial">
+                    @foreach (var m in Model.Materials)
+                    {
+                        <input type="radio" class="btn-check" name="material" id="mat-@m.Code" value="@m.Code" checked="@(m.Code == c.MaterialCode)" data-wall-material />
+                        <label class="wall-material" for="mat-@m.Code">
+                            <span class="wall-material-head">
+                                <strong>@m.Name</strong>
+                                <span class="wall-material-price">@Html.Money(m.PricePerM2)/m²</span>
+                            </span>
+                            <span class="wall-material-specs">
+                                @m.WeightGsm gr/m² · panel @m.PanelWidthCm.ToString("0") cm · maks. boy @m.MaxHeightCm.ToString("0") cm@(m.FireRating is null ? "" : $" · {m.FireRating}")
+                            </span>
+                            <span class="wall-material-badges">
+                                @if (m.IsSelfAdhesive) { <span class="badge text-bg-success">Kendinden yapışkanlı</span> }
+                                @if (m.RequiresGlue) { <span class="badge text-bg-warning">Tutkal gerekir</span> }
+                            </span>
+                            @if (m.Features.Count > 0)
+                            {
+                                <span class="wall-material-features">@string.Join(" · ", m.Features)</span>
+                            }
+                        </label>
+                    }
+                </div>
+            </section>
+
+            <section class="wall-step" aria-labelledby="stepImage">
+                <h2 class="wall-step-title" id="stepImage"><span>3</span> Görsel ayarları</h2>
+                @if (isPattern)
+                {
+                    <p class="small text-muted">Desenli ürün: tasarım @p.RepeatWidthCm?.ToString("0.#") × @p.RepeatHeightCm?.ToString("0.#") cm tekrarla@(p.RepeatType == "HalfDrop" ? " (yarım kaydırmalı)" : "") duvarınıza döşenir.</p>
+                    <input type="hidden" name="fit" value="crop" />
+                }
+                else
+                {
+                    <fieldset class="mb-2">
+                        <legend class="small fw-semibold mb-1">Görseli ölçüye uydur</legend>
+                        <div class="d-flex flex-wrap gap-2">
+                            <input type="radio" class="btn-check" name="fit" id="fit-crop" value="crop" checked="@(c.Fit == FitMode.Crop)" data-wall-fit />
+                            <label class="btn btn-sm btn-outline-secondary" for="fit-crop"><i class="bi bi-crop"></i> Kırp</label>
+                            <input type="radio" class="btn-check" name="fit" id="fit-stretch" value="stretch" checked="@(c.Fit == FitMode.Stretch)" data-wall-fit />
+                            <label class="btn btn-sm btn-outline-secondary" for="fit-stretch"><i class="bi bi-arrows-angle-expand"></i> Esnet</label>
+                            <button type="button" class="btn btn-sm btn-link" data-wall-crop-toggle aria-expanded="false">Kırpma alanını ayarla</button>
+                        </div>
+                        <p class="small text-warning-emphasis mt-1 mb-0" data-wall-stretch-warning hidden>Esnet seçildiğinde görselin tamamı kullanılır ama en-boy oranı bozulur; görsel yatay/dikey uzamış görünebilir.</p>
+                        <p class="small text-muted mt-1 mb-0" data-wall-crop-help hidden>Kırpma alanını fareyle veya klavyeyle (ok tuşları taşır, Shift+ok hızlı taşır) konumlandırın. Oran seçtiğiniz ölçüye kilitlidir.</p>
+                    </fieldset>
+                }
+                <div class="d-flex flex-wrap gap-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="mirror" value="1" id="wallMirror" checked="@c.Mirror" data-wall-mirror />
+                        <label class="form-check-label" for="wallMirror">Ayna (yatay çevir)</label>
+                    </div>
+                    <div class="d-flex gap-2" role="radiogroup" aria-label="Filtre">
+                        @foreach (var (value, label) in new[] { ("none", "Renkli"), ("grayscale", "Siyah-Beyaz"), ("sepia", "Sepya") })
+                        {
+                            <input type="radio" class="btn-check" name="filter" id="filter-@value" value="@value" checked="@(c.Filter.ToString().ToLowerInvariant() == value)" data-wall-filter />
+                            <label class="btn btn-sm btn-outline-secondary" for="filter-@value">@label</label>
+                        }
+                    </div>
+                </div>
+            </section>
+
+            <section class="wall-step" aria-labelledby="stepOrder">
+                <h2 class="wall-step-title" id="stepOrder"><span>4</span> Adet ve sipariş</h2>
+                <div class="d-flex flex-wrap gap-2 align-items-stretch">
+                    <div style="width:6.5rem">
+                        <label for="wallQty" class="visually-hidden">Adet</label>
+                        <input id="wallQty" type="number" name="quantity" class="form-control" min="1" max="99" value="@Model.InitialQuantity" data-wall-qty />
+                    </div>
+                    <button type="submit" class="btn btn-primary flex-grow-1" data-wall-add><i class="bi bi-cart-plus"></i> Sepete Ekle</button>
+                </div>
+                <div class="mt-2"><wall-preview-link product="@p.Slug" config="@c" variant="button" source="detay" css-class="w-100" /></div>
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    @if (Model.SelectedMaterial?.SampleProductId is Guid)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-wall-sample><i class="bi bi-swatch"></i> Numune sipariş et</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-wall-sample hidden><i class="bi bi-swatch"></i> Numune sipariş et</button>
+                    }
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-wall-design-request><i class="bi bi-pencil-square"></i> Tasarım değişikliği iste</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-tryon-toggle data-product-id="@p.ProductId"><i class="bi bi-plus-square"></i> <span>Duvarımda Dene</span></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-fav-toggle data-product-id="@p.ProductId" aria-label="Favorilere ekle"><i class="bi bi-heart"></i></button>
+                </div>
+            </section>
+
+            <section class="wall-summary" aria-labelledby="stepSummary" aria-live="polite">
+                <h2 class="wall-step-title" id="stepSummary"><span>5</span> Fiyat özeti</h2>
+                <dl class="wall-summary-list">
+                    <dt>Faturalanan alan</dt><dd data-sum="billed">@q.FaturaM2.ToString("N2") m²</dd>
+                    <dt>Panel sayısı</dt><dd data-sum="panels">@q.PanelSayisi × @q.PanelGenisligi.ToString("0") cm</dd>
+                    <dt>Birim fiyat</dt><dd data-sum="unit">@Html.Money(q.BirimFiyat)</dd>
+                    <dt>Ara toplam</dt><dd data-sum="subtotal">@Html.Money(q.AraToplam)</dd>
+                    <dt data-sum-row="discount" hidden="@(q.Indirim <= 0)">İndirim</dt><dd data-sum="discount" hidden="@(q.Indirim <= 0)">-@Html.Money(q.Indirim)</dd>
+                    <dt>KDV (%@p.TaxRatePercentage.ToString("0"))</dt><dd data-sum="tax">@Html.Money(q.Kdv)</dd>
+                    <dt class="wall-summary-total">Toplam</dt><dd class="wall-summary-total" data-sum="total">@Html.Money(q.Toplam)</dd>
+                </dl>
+                <p class="small mb-1" data-sum="shipping">
+                    @if (q.Kargo == 0) { <span class="text-success">Kargo ücretsiz.</span> }
+                    else if (q.UcretsizKargoIcinKalan is decimal rest && rest > 0) { <span>Ücretsiz kargoya <strong>@Html.Money(rest)</strong> kaldı.</span> }
+                    else { <span class="text-muted">Kargo ücreti ödeme adımında hesaplanır.</span> }
+                </p>
+                <p class="small mb-1" data-sum="glue">
+                    @if (q.TutkalGerekir) { <span>Bu malzeme tutkal gerektirir@(q.TutkalUcretsiz ? " — tutkal ücretsiz." : ".")</span> }
+                </p>
+                <p class="small mb-2"><i class="bi bi-truck"></i> Tahmini teslim: <strong data-sum="delivery">@Model.Delivery.Label</strong></p>
+                <button type="button" class="btn btn-sm btn-outline-dark" data-wall-copy-link><i class="bi bi-link-45deg"></i> Bağlantıyı kopyala</button>
+            </section>
+        </form>
+    </div>
+</div>

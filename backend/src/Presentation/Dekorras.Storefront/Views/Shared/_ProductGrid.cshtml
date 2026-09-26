@@ -1,4 +1,6 @@
 @using Dekorras.Application.Catalog.Storefront
+@using Dekorras.Application.WallCovering
+@inject MediatR.ISender Sender
 @using Dekorras.Domain.Catalog
 @model IReadOnlyCollection<StorefrontProductListItemDto>
 @{
@@ -11,6 +13,9 @@
     // `ViewData["ProductGridDefaultCols"]` AYARLAMADIĞI için varsayılan 4'te kalır - eski
     // `row-cols-md-4` görünümüyle BİREBİR aynı, hiçbir görsel değişiklik YOK.
     var defaultCols = ViewData["ProductGridDefaultCols"] as int? ?? 4;
+    // Ölçüye özel duvar kağıtları (ürün kimliği → m²'den başlayan fiyat): kartta "Ölçünü Seç" + "Duvarında Gör"
+    // gösterilir, düz "Sepete Ekle" GÖSTERİLMEZ (ölçüsüz sepete girmesinler). Sipariş üzerine üretildiği için stok rozeti de yok.
+    IReadOnlyDictionary<Guid, decimal> wallPrices = Model.Count == 0 ? new Dictionary<Guid, decimal>() : await Sender.Send(new GetWallCardInfoQuery(Model.Select(p => p.Id).ToList()));
 }
 
 @if (Model.Count == 0)
@@ -22,6 +27,7 @@ else
     <div class="row g-4" data-product-row data-cols="@defaultCols">
         @foreach (var product in Model)
         {
+            var isWall = wallPrices.TryGetValue(product.Id, out var wallFromPrice);
             <div class="col">
                 <div class="card h-100 dk-product-card">
                     <div class="dk-product-card-media">
@@ -43,7 +49,12 @@ else
                         <h5 class="card-title">
                             <a class="text-decoration-none" asp-controller="Product" asp-action="Details" asp-route-slug="@product.Slug">@product.Name</a>
                         </h5>
-                        @if (product.PricesVisible)
+                        @if (isWall)
+                        {
+                            <p class="card-text fw-bold">@Html.Money(wallFromPrice)<small class="fw-normal">/m²</small> <small class="text-muted fw-normal">@Localizer["başlayan fiyatlarla (KDV hariç)"]</small></p>
+                            <p class="card-text"><span class="badge bg-info-subtle text-info-emphasis">@Localizer["Ölçüye özel üretim"]</span></p>
+                        }
+                        else if (product.PricesVisible)
                         {
                             <p class="card-text fw-bold">@Html.Money(product.PriceTry) <small class="text-muted">@Localizer["(KDV %{0} dahil değil)", product.TaxRatePercentage.ToString("0")]</small></p>
                         }
@@ -51,18 +62,26 @@ else
                         {
                             <p class="card-text fw-bold text-muted">@Localizer["Fiyat için bizimle iletişime geçin"]</p>
                         }
-                        <p class="card-text">
-                            @if (product.InStock)
-                            {
-                                <span class="badge bg-success">@Localizer["Stokta Var"]</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-secondary">@Localizer["Stokta Yok"]</span>
-                            }
-                        </p>
+                        @if (!isWall)
+                        {
+                            <p class="card-text">
+                                @if (product.InStock)
+                                {
+                                    <span class="badge bg-success">@Localizer["Stokta Var"]</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">@Localizer["Stokta Yok"]</span>
+                                }
+                            </p>
+                        }
                         <div class="d-flex gap-1 flex-wrap">
-                            @if (!product.PricesVisible)
+                            @if (isWall)
+                            {
+                                <a class="btn btn-sm btn-primary" asp-controller="Product" asp-action="Details" asp-route-slug="@product.Slug">@Localizer["Ölçünü Seç"]</a>
+                                <wall-preview-link product="@product.Slug" variant="button" source="kart" css-class="btn-sm" />
+                            }
+                            else if (!product.PricesVisible)
                             {
                                 <span class="text-muted small">@Localizer["Fiyat almak için bizimle iletişime geçin."]</span>
                             }

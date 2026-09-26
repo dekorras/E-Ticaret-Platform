@@ -1,0 +1,318 @@
+@page "/admin/wall/scenes"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@implements IDisposable
+@using Dekorras.Application.WallCovering
+@using Dekorras.Domain.WallCovering
+@using Microsoft.AspNetCore.Components.Forms
+@inject MediatR.ISender Sender
+@inject IJSRuntime JS
+
+<PageTitle>Oda Sahneleri</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Oda Sahneleri</h4>
+    <button class="btn btn-outline-secondary" @onclick="RegenerateThumbsAsync">Katalog küçük resimlerini yeniden üret</button>
+</div>
+<p class="text-muted">"Duvarında Gör" ve katalog küçük resimleri bu sahnelerle üretilir. Gölge haritası (çarpımla karışır) ve ön plan maskesi (beyaz = önde kalan nesneler) taban görselle aynı boyutta PNG olmalıdır.</p>
+
+@if (_message is not null) { <div class="alert alert-success">@_message</div> }
+@if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+
+<div class="row">
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><h5 class="card-title mb-0">Sahneler</h5></div>
+            <div class="list-group list-group-flush">
+                @foreach (var s in _scenes)
+                {
+                    <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2 @(s.Scene.Id == _selected?.Scene.Id ? "active" : "")" @onclick="() => SelectAsync(s)">
+                        <img src="@s.Scene.BaseImageUrl" alt="" style="width:64px;height:40px;object-fit:cover" class="rounded" />
+                        <span class="flex-grow-1 text-start">
+                            @s.Scene.Name
+                            @if (s.Scene.IsDefault) { <span class="badge bg-primary ms-1">varsayılan</span> }
+                            @if (!s.IsActive) { <span class="badge bg-secondary ms-1">pasif</span> }
+                        </span>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h5 class="card-title mb-0">Yeni sahne</h5></div>
+            <div class="card-body">
+                <input class="form-control mb-2" placeholder="Ad (ör. Salon - açık)" @bind="_newName" />
+                <select class="form-select mb-2" @bind="_newRoomType">
+                    @foreach (var r in Enum.GetValues<RoomType>()) { <option value="@r">@RoomLabel(r)</option> }
+                </select>
+                <div class="row g-2 mb-2">
+                    <div class="col"><input type="number" class="form-control" placeholder="Duvar eni (cm)" @bind="_newWidthCm" /></div>
+                    <div class="col"><input type="number" class="form-control" placeholder="Duvar boyu (cm)" @bind="_newHeightCm" /></div>
+                </div>
+                <InputFile OnChange="e => _newFile = e.File" accept="image/jpeg,image/png,image/webp" class="form-control mb-2" />
+                <button class="btn btn-primary w-100" disabled="@(_busy)" @onclick="CreateAsync">Oluştur</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        @if (_selected is not null && _form is not null)
+        {
+            <div class="card">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="card-title mb-0">@_selected.Scene.Name <span class="text-muted fs-13">@_selected.Scene.ImageWidthPx×@_selected.Scene.ImageHeightPx px · v@_selected.Scene.Version</span></h5>
+                    <div class="d-flex gap-2">
+                        @if (!_selected.Scene.IsDefault)
+                        {
+                            <button class="btn btn-sm btn-outline-primary" @onclick="SetDefaultAsync">Varsayılan yap</button>
+                        }
+                        <button class="btn btn-sm @(_selected.IsActive ? "btn-outline-warning" : "btn-outline-success")" @onclick="ToggleActiveAsync">@(_selected.IsActive ? "Pasife al" : "Aktifleştir")</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="form-text mt-0">Turuncu tutamaçları sürükleyerek duvarın 4 köşesini (sol-üst, sağ-üst, sağ-alt, sol-alt) işaretleyin, sonra Kaydet'e basın.</p>
+                    <div id="wallSceneEditor" class="border rounded mb-3 overflow-hidden" style="user-select:none"></div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4"><label class="form-label">Ad</label><input class="form-control" @bind="_form.Name" /></div>
+                        <div class="col-md-3">
+                            <label class="form-label">Oda tipi</label>
+                            <select class="form-select" @bind="_form.RoomType">
+                                @foreach (var r in Enum.GetValues<RoomType>()) { <option value="@r">@RoomLabel(r)</option> }
+                            </select>
+                        </div>
+                        <div class="col-md-2"><label class="form-label">Duvar eni (cm)</label><input type="number" class="form-control" @bind="_form.WidthCm" /></div>
+                        <div class="col-md-2"><label class="form-label">Duvar boyu (cm)</label><input type="number" class="form-control" @bind="_form.HeightCm" /></div>
+                        <div class="col-md-1"><label class="form-label">Sıra</label><input type="number" class="form-control" @bind="_form.SortOrder" /></div>
+                    </div>
+                    <div class="small text-muted mb-3">Köşeler (px): @string.Join(" · ", Enumerable.Range(0, 4).Select(i => $"({_form.Corners[i * 2]:0.#}, {_form.Corners[i * 2 + 1]:0.#})"))</div>
+                    <button class="btn btn-success" disabled="@_busy" @onclick="SaveAsync">Kaydet</button>
+
+                    <hr />
+                    <h6>Katmanlar</h6>
+                    <div class="row g-3">
+                        @foreach (var layer in Enum.GetValues<SceneLayer>())
+                        {
+                            var current = layer switch { SceneLayer.Base => _selected.Scene.BaseImageUrl, SceneLayer.Shadow => _selected.Scene.ShadowMapUrl, _ => _selected.Scene.ForegroundMaskUrl };
+                            <div class="col-md-4">
+                                <label class="form-label">@LayerLabel(layer)</label>
+                                @if (current is not null)
+                                {
+                                    <a href="@current" target="_blank" class="d-block mb-1"><img src="@current" alt="" class="img-fluid rounded border" style="max-height:90px" /></a>
+                                }
+                                else
+                                {
+                                    <div class="text-muted small mb-1">yok</div>
+                                }
+                                <InputFile OnChange="e => UploadLayerAsync(layer, e)" accept="@(layer == SceneLayer.Base ? "image/jpeg,image/png,image/webp" : "image/png")" class="form-control form-control-sm" />
+                                @if (layer != SceneLayer.Base && current is not null)
+                                {
+                                    <button class="btn btn-link btn-sm text-danger px-0" @onclick="() => RemoveLayerAsync(layer)">Kaldır</button>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <hr />
+                    <h6>Deneme render'ı</h6>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-5"><label class="form-label">Ürün slug'ı</label><input class="form-control" @bind="_testSlug" placeholder="boş = rastgele bir poster" /></div>
+                        <div class="col-md-3"><button class="btn btn-outline-primary" disabled="@_busy" @onclick="TestRenderAsync">Render al</button></div>
+                    </div>
+                    @if (_testUrl is not null)
+                    {
+                        <img src="@_testUrl" alt="Deneme render'ı" class="img-fluid rounded border mt-3" />
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="card"><div class="card-body text-muted">Düzenlemek için soldan bir sahne seçin.</div></div>
+        }
+    </div>
+</div>
+
+@code {
+    private sealed class SceneForm
+    {
+        public string Name { get; set; } = "";
+        public RoomType RoomType { get; set; }
+        public decimal WidthCm { get; set; }
+        public decimal HeightCm { get; set; }
+        public int SortOrder { get; set; }
+        public double[] Corners { get; set; } = new double[8];
+    }
+
+    private const long MaxUploadBytes = 20 * 1024 * 1024;
+    private IReadOnlyList<SceneAdminDto> _scenes = [];
+    private SceneAdminDto? _selected;
+    private SceneForm? _form;
+    private bool _editorDirty, _busy;
+    private string? _message, _error, _testUrl, _testSlug;
+    private string _newName = "";
+    private RoomType _newRoomType = RoomType.LivingRoom;
+    private decimal _newWidthCm = 400m, _newHeightCm = 260m;
+    private IBrowserFile? _newFile;
+    private DotNetObjectReference<WallScenes>? _dotNetRef;
+
+    public static string RoomLabel(RoomType r) => r switch
+    {
+        RoomType.LivingRoom => "Salon",
+        RoomType.Bedroom => "Yatak odası",
+        RoomType.KidsRoom => "Çocuk odası",
+        RoomType.Office => "Ofis",
+        RoomType.Kitchen => "Mutfak",
+        RoomType.Hallway => "Koridor",
+        RoomType.Bathroom => "Banyo",
+        _ => r.ToString()
+    };
+
+    private static string LayerLabel(SceneLayer l) => l switch
+    {
+        SceneLayer.Base => "Taban görsel (JPEG/PNG)",
+        SceneLayer.Shadow => "Gölge haritası (PNG)",
+        _ => "Ön plan maskesi (PNG)"
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync(Guid? keepSelected = null)
+    {
+        _scenes = await Sender.Send(new GetRoomScenesAdminQuery());
+        var id = keepSelected ?? _selected?.Scene.Id;
+        var s = id is null ? null : _scenes.FirstOrDefault(x => x.Scene.Id == id);
+        if (s is not null) Select(s, resetForm: keepSelected is not null || _form is null);
+    }
+
+    private Task SelectAsync(SceneAdminDto s)
+    {
+        _message = _error = null;
+        _testUrl = null;
+        Select(s, resetForm: true);
+        return Task.CompletedTask;
+    }
+
+    private void Select(SceneAdminDto s, bool resetForm)
+    {
+        _selected = s;
+        if (resetForm)
+        {
+            _form = new SceneForm
+            {
+                Name = s.Scene.Name,
+                RoomType = Enum.TryParse<RoomType>(s.Scene.RoomType, out var rt) ? rt : RoomType.LivingRoom,
+                WidthCm = s.Scene.RealWallWidthCm,
+                HeightCm = s.Scene.RealWallHeightCm,
+                SortOrder = s.SortOrder,
+                Corners = (double[])s.Scene.WallQuad.Clone()
+            };
+        }
+        _editorDirty = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_editorDirty || _selected is null || _form is null) return;
+        _editorDirty = false;
+        _dotNetRef ??= DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("dekorrasWallSceneEditor.init", "wallSceneEditor", $"{_selected.Scene.BaseImageUrl}?v={_selected.Scene.Version}",
+            _selected.Scene.ImageWidthPx, _selected.Scene.ImageHeightPx, _form.Corners, _dotNetRef);
+    }
+
+    [JSInvokable]
+    public Task CornersChanged(double[] corners)
+    {
+        if (_form is not null && corners.Length == 8) _form.Corners = corners;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RunAsync(Func<Task> action, string? success = null)
+    {
+        _message = _error = null;
+        _busy = true;
+        try
+        {
+            await action();
+            _message = success;
+        }
+        catch (Exception ex) { _error = AdminErrors.Message(ex); }
+        finally { _busy = false; }
+    }
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        await Sender.Send(new UpdateRoomSceneCommand(_selected!.Scene.Id, _form!.Name, _form.RoomType, _form.SortOrder, _form.Corners, _form.WidthCm, _form.HeightCm));
+        await LoadAsync(_selected.Scene.Id);
+    }, "Sahne kaydedildi. Önbellekteki render'lar temizlendi.");
+
+    private Task CreateAsync() => RunAsync(async () =>
+    {
+        if (_newFile is null) throw new InvalidOperationException("Taban görseli seçin.");
+        if (string.IsNullOrWhiteSpace(_newName)) throw new InvalidOperationException("Sahne adı girin.");
+        using var buffer = await ReadAsync(_newFile);
+        var id = await Sender.Send(new CreateRoomSceneCommand(_newName.Trim(), _newRoomType, buffer, _newWidthCm, _newHeightCm));
+        _newName = "";
+        _newFile = null;
+        await LoadAsync(id);
+    }, "Sahne oluşturuldu. Duvar köşelerini ayarlayıp kaydedin.");
+
+    private Task UploadLayerAsync(SceneLayer layer, InputFileChangeEventArgs e) => RunAsync(async () =>
+    {
+        using var buffer = await ReadAsync(e.File);
+        await Sender.Send(new UploadSceneLayerCommand(_selected!.Scene.Id, layer, buffer));
+        await LoadAsync(_selected.Scene.Id);
+    }, "Katman yüklendi.");
+
+    private Task RemoveLayerAsync(SceneLayer layer) => RunAsync(async () =>
+    {
+        await Sender.Send(new UploadSceneLayerCommand(_selected!.Scene.Id, layer, null));
+        await LoadAsync(_selected.Scene.Id);
+    }, "Katman kaldırıldı.");
+
+    private Task SetDefaultAsync() => RunAsync(async () =>
+    {
+        await Sender.Send(new SetDefaultSceneCommand(_selected!.Scene.Id));
+        await LoadAsync(_selected.Scene.Id);
+    }, "Varsayılan sahne değişti; katalog küçük resimleri arka planda yeniden üretilecek.");
+
+    private Task ToggleActiveAsync() => RunAsync(async () =>
+    {
+        await Sender.Send(new SetSceneActiveCommand(_selected!.Scene.Id, !_selected.IsActive));
+        await LoadAsync(_selected.Scene.Id);
+    });
+
+    private Task RegenerateThumbsAsync() => RunAsync(async () =>
+    {
+        var count = await Sender.Send(new RegenerateSceneThumbsCommand());
+        _message = $"{count} ürünün sahne küçük resmi arka planda yeniden üretilecek.";
+    });
+
+    private Task TestRenderAsync() => RunAsync(async () =>
+    {
+        Guid productId;
+        if (!string.IsNullOrWhiteSpace(_testSlug))
+        {
+            productId = await Sender.Send(new GetWallProductIdQuery(_testSlug.Trim())) ?? throw new InvalidOperationException("Bu slug'la konfigüre edilebilir ürün bulunamadı.");
+        }
+        else
+        {
+            var catalog = await Sender.Send(new GetWallCatalogQuery(PageSize: 24));
+            productId = catalog.Items.Count > 0 ? catalog.Items[Random.Shared.Next(catalog.Items.Count)].ProductId : throw new InvalidOperationException("Katalogda ürün yok.");
+        }
+        var material = (await Sender.Send(new GetMaterialsQuery(productId))).FirstOrDefault() ?? throw new InvalidOperationException("Aktif malzeme yok.");
+        var config = new WallConfiguration(Math.Min(_form!.WidthCm, 1000m), Math.Min(_form.HeightCm, material.MaxHeightCm), material.Code);
+        var result = await Sender.Send(new RenderWallPreviewQuery(_selected!.Scene.Id, productId, config, WallAlign.Center, 1200, Watermark: true, PanelLines: true));
+        _testUrl = result.Url;
+    });
+
+    private static async Task<MemoryStream> ReadAsync(IBrowserFile file)
+    {
+        var buffer = new MemoryStream();
+        await using (var stream = file.OpenReadStream(MaxUploadBytes)) await stream.CopyToAsync(buffer);
+        buffer.Position = 0;
+        return buffer;
+    }
+
+    public void Dispose() => _dotNetRef?.Dispose();
+}

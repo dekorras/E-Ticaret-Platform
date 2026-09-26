@@ -1,0 +1,109 @@
+@page "/admin/wall/settings"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.SystemAdmin.Commands
+@using Dekorras.Application.SystemAdmin.Queries
+@using Dekorras.Application.WallCovering
+@inject MediatR.ISender Sender
+
+<PageTitle>Duvar Kağıdı Ayarları</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Duvar Kağıdı Ayarları</h4>
+</div>
+<p class="text-muted">Boş bırakılan alanlarda varsayılan değer kullanılır (sağda gösterilir). Tutarlar KDV hariç ₺'dir.</p>
+
+@if (_values is null)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <div class="card" style="max-width: 860px;">
+        <div class="card-body">
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="chargeBleed" @bind="_chargeBleed" />
+                <label class="form-check-label" for="chargeBleed">Taşma payı (bleed) fiyata dahil edilsin</label>
+                <div class="form-text">Açıkken faturalanan alan = üretim alanı (ölçü + taşma payı); kapalıyken yalnız müşterinin girdiği ölçü.</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Varsayılan oda sahnesi</label>
+                <select class="form-select" @bind="_values[WallCoveringSettingKeys.DefaultSceneId]">
+                    <option value="">(İlk varsayılan işaretli sahne)</option>
+                    @foreach (var s in _scenes)
+                    {
+                        <option value="@s.Scene.Id">@s.Scene.Name</option>
+                    }
+                </select>
+            </div>
+
+            @foreach (var field in Fields)
+            {
+                <div class="row mb-3 align-items-center">
+                    <label class="col-sm-5 col-form-label" for="@field.Key">@field.Label</label>
+                    <div class="col-sm-4">
+                        <input id="@field.Key" class="form-control" @bind="_values[field.Key]" placeholder="@field.Default" />
+                    </div>
+                    <div class="col-sm-3 form-text">@field.Help</div>
+                </div>
+            }
+
+            @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+            @if (_saved is not null) { <div class="alert alert-success">@_saved</div> }
+            <button class="btn btn-success" @onclick="SaveAsync">Kaydet</button>
+        </div>
+    </div>
+}
+
+@code {
+    private sealed record Field(string Key, string Label, string Default, string Help, Func<string, bool> IsValid);
+
+    private static bool Dec(string v) => decimal.TryParse(v.Replace(',', '.'), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var d) && d >= 0;
+    private static bool Int(string v) => int.TryParse(v, out var i) && i >= 0;
+
+    private static readonly Field[] Fields =
+    [
+        new(WallCoveringSettingKeys.DefaultWidthCm, "Varsayılan genişlik (cm)", "300", "Konfigüratör açılışı", Dec),
+        new(WallCoveringSettingKeys.DefaultHeightCm, "Varsayılan yükseklik (cm)", "250", "Konfigüratör açılışı", Dec),
+        new(WallCoveringSettingKeys.FreeShippingThresholdTry, "Ücretsiz kargo eşiği (₺)", "kapalı", "Boş = kapalı; tüm sepetleri etkiler", Dec),
+        new(WallCoveringSettingKeys.GlueFreeThresholdTry, "Tutkal hediye eşiği (₺)", "1000", "Duvar kağıdı ara toplamı", Dec),
+        new(WallCoveringSettingKeys.RoomPreviewFreeQuota, "Kendi oda önizleme kotası (adet/gün)", "10", "Ziyaretçi başına", Int),
+        new(WallCoveringSettingKeys.MinPrintDpi, "En düşük baskı DPI uyarısı", "72", "Altında uyarı gösterilir", Int),
+        new(WallCoveringSettingKeys.ProofAutoApproveHours, "Onay önizlemesi otomatik onay (saat)", "24", "Yanıt yoksa", Int),
+        new(WallCoveringSettingKeys.DesignRequestSlaBusinessDays, "Tasarım talebi yanıt süresi (iş günü)", "2", "Gecikenler listede işaretlenir", Int),
+        new(WallCoveringSettingKeys.WallPreviewLinkPercent, "“Duvarında Gör” gösterim yüzdesi", "100", "0–100, kademeli açılış", v => int.TryParse(v, out var i) && i is >= 0 and <= 100),
+        new(WallCoveringSettingKeys.CategorySlugs, "Konfigüratör kategorileri (slug, virgülle)", "duvar-kagitlari-129,posterler-141", "Alt kategoriler dahil", _ => true),
+        new(WallCoveringSettingKeys.ExtraHolidays, "Ek tatil günleri (yyyy-MM-dd, virgülle)", "", "Teslim tahmininde", v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).All(d => DateOnly.TryParseExact(d, "yyyy-MM-dd", out _))),
+        new(WallCoveringSettingKeys.AdminNotificationEmail, "Bildirim e-postası", "", "Tasarım talepleri / revizyonlar", v => v.Contains('@')),
+        new(WallCoveringSettingKeys.PublicBaseUrl, "Sitenin kök adresi", "https://www.dekorras.com", "E-posta bağlantıları", v => Uri.TryCreate(v, UriKind.Absolute, out var u) && u.Scheme is "https" or "http"),
+    ];
+
+    private Dictionary<string, string>? _values;
+    private IReadOnlyList<SceneAdminDto> _scenes = [];
+    private bool _chargeBleed = true;
+    private string? _saved, _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await Sender.Send(new GetSettingsQuery(WallCoveringSettingKeys.All));
+        _scenes = (await Sender.Send(new GetRoomScenesAdminQuery())).Where(s => !s.Scene.IsUserScene).ToList();
+        _values = WallCoveringSettingKeys.All.ToDictionary(k => k, k => settings.FirstOrDefault(s => s.Key == k)?.Value ?? "");
+        _chargeBleed = !string.Equals(_values[WallCoveringSettingKeys.ChargeBleed], "false", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task SaveAsync()
+    {
+        _saved = _error = null;
+        var invalid = Fields.Where(f => !string.IsNullOrWhiteSpace(_values![f.Key]) && !f.IsValid(_values[f.Key].Trim())).Select(f => f.Label).ToList();
+        if (invalid.Count > 0)
+        {
+            _error = "Geçersiz değer: " + string.Join(", ", invalid);
+            return;
+        }
+        _values![WallCoveringSettingKeys.ChargeBleed] = _chargeBleed ? "true" : "false";
+        foreach (var (key, value) in _values)
+            await Sender.Send(new UpsertSettingCommand(key, value.Trim()));
+        _saved = "Kaydedildi.";
+    }
+}

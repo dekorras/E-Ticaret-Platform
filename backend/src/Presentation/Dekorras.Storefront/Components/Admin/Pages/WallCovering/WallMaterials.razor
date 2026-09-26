@@ -1,0 +1,163 @@
+@page "/admin/wall/materials"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.WallCovering
+@inject MediatR.ISender Sender
+
+<PageTitle>Duvar Kağıdı Malzemeleri</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Duvar Kağıdı Malzemeleri</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary" @onclick="CreateSampleGlueAsync">Numune/tutkal ürünlerini oluştur</button>
+        <button class="btn btn-primary" @onclick="NewMaterial">+ Yeni Malzeme</button>
+    </div>
+</div>
+<p class="text-muted">Fiyatlar m² başına, KDV hariçtir. Ürün bazında farklı fiyat için ürün düzenleme → "Duvar Kağıdı" sekmesi.</p>
+
+@if (_message is not null) { <div class="alert alert-success">@_message</div> }
+@if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+
+@if (_edit is not null)
+{
+    <div class="card mb-3">
+        <div class="card-header"><h5 class="card-title mb-0">@(_edit.Id is null ? "Yeni malzeme" : $"Düzenle: {_edit.Name}")</h5></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-2"><label class="form-label">Kod</label><input class="form-control" @bind="_edit.Code" disabled="@(_edit.Id is not null)" /></div>
+                <div class="col-md-4"><label class="form-label">Ad</label><input class="form-control" @bind="_edit.Name" /></div>
+                <div class="col-md-2"><label class="form-label">₺/m²</label><input type="number" step="0.01" class="form-control" @bind="_edit.PricePerM2" /></div>
+                <div class="col-md-2"><label class="form-label">Sıra</label><input type="number" class="form-control" @bind="_edit.SortOrder" /></div>
+                <div class="col-md-2"><label class="form-label">Gramaj (g/m²)</label><input type="number" class="form-control" @bind="_edit.WeightGsm" /></div>
+                <div class="col-md-2"><label class="form-label">Panel eni (cm)</label><input type="number" step="0.1" class="form-control" @bind="_edit.PanelWidthCm" /></div>
+                <div class="col-md-2"><label class="form-label">Azami boy (cm)</label><input type="number" step="0.1" class="form-control" @bind="_edit.MaxHeightCm" /></div>
+                <div class="col-md-2"><label class="form-label">Taşma payı (cm)</label><input type="number" step="0.1" class="form-control" @bind="_edit.BleedCm" /></div>
+                <div class="col-md-2"><label class="form-label">Asgari m²</label><input type="number" step="0.01" class="form-control" @bind="_edit.MinBillableAreaM2" /></div>
+                <div class="col-md-2"><label class="form-label">Yanmazlık</label><input class="form-control" @bind="_edit.FireRating" placeholder="ör. B-s1,d0" /></div>
+                <div class="col-md-2 d-flex flex-column justify-content-end">
+                    <div class="form-check"><input class="form-check-input" type="checkbox" id="selfAdh" @bind="_edit.IsSelfAdhesive" /><label class="form-check-label" for="selfAdh">Yapışkanlı</label></div>
+                    <div class="form-check"><input class="form-check-input" type="checkbox" id="glue" @bind="_edit.RequiresGlue" /><label class="form-check-label" for="glue">Tutkal gerekir</label></div>
+                </div>
+                <div class="col-md-6"><label class="form-label">Açıklama</label><textarea class="form-control" rows="2" @bind="_edit.Description"></textarea></div>
+                <div class="col-md-6"><label class="form-label">Özellikler (satır başına bir madde)</label><textarea class="form-control" rows="2" @bind="_edit.Features"></textarea></div>
+            </div>
+            <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-success" @onclick="SaveAsync">Kaydet</button>
+                <button class="btn btn-light" @onclick="() => _edit = null">Vazgeç</button>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-nowrap align-middle mb-0" id="wallMaterialsTable">
+                <thead><tr><th>Sıra</th><th>Kod</th><th>Ad</th><th>₺/m²</th><th>Panel</th><th>Azami boy</th><th>Taşma</th><th>Asgari</th><th>Numune / Tutkal</th><th>Durum</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var m in _materials)
+                    {
+                        <tr class="@(m.IsActive ? "" : "text-muted")">
+                            <td>@m.SortOrder</td>
+                            <td><code>@m.Code</code></td>
+                            <td>
+                                @m.Name
+                                @if (m.IsSelfAdhesive) { <span class="badge bg-info-subtle text-info ms-1">yapışkanlı</span> }
+                                @if (m.RequiresGlue) { <span class="badge bg-warning-subtle text-warning ms-1">tutkal</span> }
+                            </td>
+                            <td>@m.PricePerM2.ToString("N2") ₺</td>
+                            <td>@m.PanelWidthCm.ToString("0.#") cm</td>
+                            <td>@m.MaxHeightCm.ToString("0.#") cm</td>
+                            <td>@m.BleedCm.ToString("0.#") cm</td>
+                            <td>@m.MinBillableAreaM2.ToString("0.##") m²</td>
+                            <td>
+                                @if (m.SampleProductId is { } sp) { <a href="/admin/ecommerce/products/@sp">numune</a> } else { <span class="text-muted">—</span> }
+                                /
+                                @if (m.GlueProductId is { } gp) { <a href="/admin/ecommerce/products/@gp">tutkal</a> } else { <span class="text-muted">—</span> }
+                            </td>
+                            <td><span class="badge @(m.IsActive ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")">@(m.IsActive ? "Aktif" : "Pasif")</span></td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(m)">Düzenle</button>
+                                <button class="btn btn-sm @(m.IsActive ? "btn-outline-warning" : "btn-outline-success")" @onclick="() => ToggleAsync(m)">@(m.IsActive ? "Pasife Al" : "Aktifleştir")</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private sealed class MaterialForm
+    {
+        public Guid? Id { get; set; }
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? Description { get; set; }
+        public string? Features { get; set; }
+        public decimal PricePerM2 { get; set; }
+        public decimal PanelWidthCm { get; set; } = 100m;
+        public decimal MaxHeightCm { get; set; } = 350m;
+        public int WeightGsm { get; set; } = 200;
+        public string? FireRating { get; set; }
+        public bool IsSelfAdhesive { get; set; }
+        public bool RequiresGlue { get; set; } = true;
+        public decimal BleedCm { get; set; } = 5m;
+        public decimal MinBillableAreaM2 { get; set; } = 1m;
+        public int SortOrder { get; set; }
+        public Guid? SampleProductId { get; set; }
+        public Guid? GlueProductId { get; set; }
+    }
+
+    private IReadOnlyList<MaterialAdminDto> _materials = [];
+    private MaterialForm? _edit;
+    private string? _message, _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _materials = await Sender.Send(new GetMaterialsAdminQuery());
+
+    private void NewMaterial() => _edit = new MaterialForm { SortOrder = _materials.Count == 0 ? 1 : _materials.Max(m => m.SortOrder) + 1 };
+
+    private void Edit(MaterialAdminDto m) => _edit = new MaterialForm
+    {
+        Id = m.Id, Code = m.Code, Name = m.Name, Description = m.Description, Features = m.Features, PricePerM2 = m.PricePerM2,
+        PanelWidthCm = m.PanelWidthCm, MaxHeightCm = m.MaxHeightCm, WeightGsm = m.WeightGsm, FireRating = m.FireRating,
+        IsSelfAdhesive = m.IsSelfAdhesive, RequiresGlue = m.RequiresGlue, BleedCm = m.BleedCm, MinBillableAreaM2 = m.MinBillableAreaM2,
+        SortOrder = m.SortOrder, SampleProductId = m.SampleProductId, GlueProductId = m.GlueProductId
+    };
+
+    private async Task SaveAsync()
+    {
+        _message = _error = null;
+        var f = _edit!;
+        try
+        {
+            await Sender.Send(new SaveMaterialCommand(f.Id, f.Code, f.Name, f.Description, f.Features, f.PricePerM2, f.PanelWidthCm, f.MaxHeightCm,
+                f.WeightGsm, f.FireRating, f.IsSelfAdhesive, f.RequiresGlue, f.BleedCm, f.MinBillableAreaM2, f.SortOrder, f.SampleProductId, f.GlueProductId));
+            _edit = null;
+            _message = "Malzeme kaydedildi. Sepetteki fiyatlar ödeme adımında yeniden hesaplanır.";
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = AdminErrors.Message(ex); }
+    }
+
+    private async Task ToggleAsync(MaterialAdminDto m)
+    {
+        await Sender.Send(new SetMaterialActiveCommand(m.Id, !m.IsActive));
+        await LoadAsync();
+    }
+
+    private async Task CreateSampleGlueAsync()
+    {
+        _message = _error = null;
+        try
+        {
+            var created = await Sender.Send(new CreateSampleAndGlueProductsCommand());
+            _message = created == 0 ? "Tüm malzemelerin numune/tutkal ürünleri zaten bağlı." : $"{created} ürün oluşturuldu ve malzemelere bağlandı.";
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = AdminErrors.Message(ex); }
+    }
+}

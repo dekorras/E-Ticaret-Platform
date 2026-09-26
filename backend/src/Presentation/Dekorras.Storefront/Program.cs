@@ -8,12 +8,14 @@ using Dekorras.Persistence;
 using Dekorras.Persistence.Security;
 using Dekorras.Storefront;
 using Dekorras.Storefront.Components.Admin;
+using Dekorras.Storefront.WallCovering;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +37,7 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("admin-auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
         partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         factory: _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddWallApiRateLimits();
 });
 
 // Admin paneli artık AYRI bir uygulama DEĞİL - "/admin" altında AYNI süreçte çalışıyor (bkz. plan
@@ -58,6 +61,24 @@ builder.Services.AddAuthorization(options =>
         ctx.User.HasClaim(AppClaimTypes.SysAdmin, "true") || ctx.User.HasClaim(AppClaimTypes.Permission, "Accounting.Access")));
     options.AddPolicy("SysAdminOnly", policy => policy.RequireClaim(AppClaimTypes.SysAdmin, "true"));
 });
+
+// Duvar kağıdı konfigüratörü API'sinin (/api/v1) belgesi - yalnızca geliştirmede yayınlanır (/openapi/v1.json, /scalar).
+builder.Services.AddOpenApi(options =>
+    options.ShouldInclude = description => description.RelativePath?.StartsWith("api/v1", StringComparison.OrdinalIgnoreCase) == true);
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddWallFeatureManagement();
+builder.Services.AddHostedService<WallBackgroundWorker>();
+// Sipariş sonrası işler (spec 1.7): onay önizlemesi + e-posta, otomatik onay, üretim dosyası (PDF).
+WallBackgroundWorker.AdditionalJobs.Add(async (sp, ct) =>
+{
+    var s = sp.GetRequiredService<MediatR.ISender>();
+    return await s.Send(new Dekorras.Application.WallCovering.GenerateProofPreviewsCommand(), ct)
+         + await s.Send(new Dekorras.Application.WallCovering.AutoApproveProofsCommand(), ct)
+         + await s.Send(new Dekorras.Application.WallCovering.GenerateProductionFilesCommand(), ct);
+});
+// Katalog liste parçası (/duvar-kagitlari/_liste) için - kişisel veri içermez (bkz. WallpaperController).
+builder.Services.AddOutputCache();
 
 builder.Services.AddApplication();
 builder.Services.AddPersistence(builder.Configuration);
@@ -87,6 +108,12 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 var app = builder.Build();
 
+if (args.Contains(WallBackfill.CommandName))
+{
+    Environment.ExitCode = await WallBackfill.RunAsync(app.Services, args);
+    return;
+}
+
 app.UseDekorrasSecurityHeaders();
 
 if (app.Environment.IsDevelopment())
@@ -110,6 +137,7 @@ else
 app.UseHttpsRedirection();
 app.UseRouting();
 app.UseRateLimiter();
+app.UseOutputCache();
 
 // Hedef diller TR/EN/DE/FR/NL/ES/AR (Arapça RTL) - bkz. plan §7. `StorefrontLanguage` çerezinden
 // okunan dil, hem içerik sorgularının (Product/Category çevirisi) hem de .resx tabanlı UI metni
@@ -196,6 +224,14 @@ app.UseStaticFiles(new StaticFileOptions
     FileProvider = new PhysicalFileProvider(LocalFileStorage.SharedUploadsRoot),
     RequestPath = "/uploads"
 });
+
+app.MapWallApi();
+app.MapWallAdminDownloads();
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
 
 app.MapRazorComponents<AdminApp>()
     .AddInteractiveServerRenderMode();

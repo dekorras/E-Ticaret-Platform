@@ -89,13 +89,24 @@
                 <ul class="list-group list-group-flush">
                     @foreach (var item in cart.Items)
                     {
+                        if (item.RequiresConfiguration)
+                        {
+                            <li class="list-group-item list-group-item-warning small">
+                                @item.Name: ölçü seçilmemiş - <a asp-controller="Cart" asp-action="Index">sepette ölçüsünü seçin veya kaldırın</a>.
+                            </li>
+                            continue;
+                        }
                         <li class="list-group-item d-flex justify-content-between">
-                            <span>@item.Name@(item.VariantOptionName is not null ? $" ({item.VariantOptionName})" : "") × @item.Quantity</span>
+                            <span>@item.Name@(item.VariantOptionName is not null ? $" ({item.VariantOptionName})" : "")@(item.Configuration is { } c ? $" ({c.WidthCm:0.#}×{c.HeightCm:0.#} cm, {c.MaterialName})" : "") × @item.Quantity</span>
                             <span>@Html.Money(item.LineTotalTry)</span>
                         </li>
                     }
                 </ul>
                 <p class="mt-2">Ara Toplam: @Html.Money(cart.SubTotalTry)</p>
+                @if (cart.GlueDiscountTry > 0)
+                {
+                    <p class="text-success">Ücretsiz tutkal: -@Html.Money(cart.GlueDiscountTry)</p>
+                }
                 @if (cart.CouponCode is not null)
                 {
                     <p class="text-success">Kupon (<code>@cart.CouponCode</code>): -@Html.Money(cart.DiscountTry)</p>
@@ -109,7 +120,14 @@
                     <p class="text-success">Hediye Çeki (<code>@cart.GiftVoucherCode</code>): -@Html.Money(cart.GiftVoucherAmountAppliedTry)</p>
                 }
                 <p class="fw-bold">Toplam (kargo hariç): @Html.Money(cart.GrandTotalTry)</p>
-                <p class="small text-muted">Kargo ücreti, seçtiğiniz kargo yöntemine göre sipariş tamamlandığında hesaplanır.</p>
+                @if (cart.FreeShipping)
+                {
+                    <p class="small text-success">Siparişinizde kargo ücretsiz.</p>
+                }
+                else
+                {
+                    <p class="small text-muted">Kargo ücreti, seçtiğiniz kargo yöntemine göre sipariş tamamlandığında hesaplanır.</p>
+                }
                 @if (ViewData["CurrencyCode"] as string != "TRY")
                 {
                     <p class="small text-muted fst-italic">Gösterilen tutarlar yaklaşık dönüşümdür - ödemeniz Türk Lirası (₺) olarak tahsil edilir.</p>

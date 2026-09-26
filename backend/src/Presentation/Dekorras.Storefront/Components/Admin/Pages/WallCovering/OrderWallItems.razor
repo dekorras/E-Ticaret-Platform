@@ -1,0 +1,134 @@
+@* Admin sipariş detayındaki "Ölçüye özel baskılar" kartı: onay önizlemesi durumu, yeniden gönderme,
+   üretim dosyası durumu/indirme/yeniden kuyruğa alma. Ölçüye özel kalem yoksa hiçbir şey render etmez. *@
+@using Dekorras.Application.WallCovering
+@using Dekorras.Domain.WallCovering
+@inject MediatR.ISender Sender
+
+@if (_items is { Count: > 0 })
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Ölçüye özel baskılar</h5>
+            <p class="text-muted small">Sipariş, tüm önizlemeler onaylanmadan "Hazırlanıyor" durumuna geçirilemez. Önizlemeler müşteri yanıt vermezse otomatik onaylanır.</p>
+            @if (_message is not null) { <div class="alert alert-success py-2">@_message</div> }
+            @if (_error is not null) { <div class="alert alert-danger py-2">@_error</div> }
+
+            @foreach (var item in _items)
+            {
+                <div class="d-flex gap-3 border-top pt-3 mt-3">
+                    <div style="width:140px" class="flex-shrink-0">
+                        @if (item.ProofPreviewUrl is not null)
+                        {
+                            <a href="@item.ProofPreviewUrl" target="_blank"><img src="@item.ProofPreviewUrl" alt="Onay önizlemesi" class="img-fluid rounded border" /></a>
+                        }
+                        else
+                        {
+                            <div class="bg-light rounded text-muted small p-3 text-center">Önizleme hazırlanıyor</div>
+                        }
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold">@item.ProductName</div>
+                        <div class="small text-muted mb-2">@item.ConfigurationSummary</div>
+
+                        <div class="mb-1">
+                            Onay:
+                            @if (item.ProofStatus is { } ps)
+                            {
+                                <span class="badge @ProofBadge(ps)">@ProofLabel(ps)@(item.AutoApproved ? " (otomatik)" : "")</span>
+                                @if (item.ProofToken is not null)
+                                {
+                                    <a class="small ms-2" href="/siparis-onay/@item.ProofToken" target="_blank">müşteri sayfası</a>
+                                }
+                                @if (ps == ProofStatus.RevizyonIstendi || ps == ProofStatus.Beklemede)
+                                {
+                                    <button class="btn btn-link btn-sm p-0 ms-2" @onclick="() => ReissueAsync(item.ProofId!.Value)">Önizlemeyi yeniden oluştur ve gönder</button>
+                                }
+                            }
+                            else { <span class="text-muted">—</span> }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(item.ProofNote))
+                        {
+                            <div class="alert alert-warning py-1 px-2 small mb-1">Müşteri notu: @item.ProofNote</div>
+                        }
+
+                        <div>
+                            Üretim dosyası:
+                            @if (item.FileStatus is { } fs)
+                            {
+                                <span class="badge @FileBadge(fs)">@FileLabel(fs)</span>
+                                @if (fs == ProductionFileStatus.Ready)
+                                {
+                                    <a class="btn btn-sm btn-outline-primary ms-2" href="/admin/wall/production-files/@item.FileId" target="_blank">PDF indir (@item.PanelCount panel)</a>
+                                }
+                                @if (fs is ProductionFileStatus.Failed or ProductionFileStatus.Ready)
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="() => RequeueAsync(item.FileId!.Value)">Yeniden üret</button>
+                                }
+                                @if (item.FileError is not null) { <div class="text-danger small">@item.FileError</div> }
+                            }
+                            else { <span class="text-muted">—</span> }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid OrderId { get; set; }
+
+    private IReadOnlyList<OrderWallItemDto>? _items;
+    private string? _message, _error;
+
+    public static string ProofLabel(ProofStatus s) => s switch
+    {
+        ProofStatus.Beklemede => "Müşteri onayı bekleniyor",
+        ProofStatus.Onaylandi => "Onaylandı",
+        ProofStatus.RevizyonIstendi => "Revizyon istendi",
+        _ => s.ToString()
+    };
+
+    private static string ProofBadge(ProofStatus s) => s switch
+    {
+        ProofStatus.Onaylandi => "bg-success-subtle text-success",
+        ProofStatus.RevizyonIstendi => "bg-danger-subtle text-danger",
+        _ => "bg-warning-subtle text-warning"
+    };
+
+    private static string FileLabel(ProductionFileStatus s) => s switch
+    {
+        ProductionFileStatus.Pending => "Onay bekliyor / kuyrukta",
+        ProductionFileStatus.Processing => "Üretiliyor",
+        ProductionFileStatus.Ready => "Hazır",
+        ProductionFileStatus.Failed => "Hata",
+        _ => s.ToString()
+    };
+
+    private static string FileBadge(ProductionFileStatus s) => s switch
+    {
+        ProductionFileStatus.Ready => "bg-success-subtle text-success",
+        ProductionFileStatus.Failed => "bg-danger-subtle text-danger",
+        _ => "bg-secondary-subtle text-secondary"
+    };
+
+    protected override async Task OnParametersSetAsync() => _items = await Sender.Send(new GetOrderWallItemsQuery(OrderId));
+
+    private async Task RunAsync(Func<Task> action, string success)
+    {
+        _message = _error = null;
+        try
+        {
+            await action();
+            _items = await Sender.Send(new GetOrderWallItemsQuery(OrderId));
+            _message = success;
+        }
+        catch (Exception ex) { _error = AdminErrors.Message(ex); }
+    }
+
+    private Task ReissueAsync(Guid proofId) =>
+        RunAsync(() => Sender.Send(new ReissueProofCommand(proofId)), "Önizleme yeniden oluşturulacak ve müşteriye tekrar gönderilecek.");
+
+    private Task RequeueAsync(Guid fileId) =>
+        RunAsync(() => Sender.Send(new RequeueProductionFileCommand(fileId)), "Üretim dosyası yeniden kuyruğa alındı.");
+}

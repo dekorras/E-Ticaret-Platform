@@ -53,6 +53,18 @@ public class Order : AuditableEntity
         Recalculate();
     }
 
+    /// <summary>Ölçüye özel duvar kağıdı kalemi: konfigürasyon ve fiyat kırılımı (malzeme adı, ₺/m²,
+    /// faturalanan m², panel, pay) sipariş anındaki halleriyle DONDURULUR.</summary>
+    public OrderItem AddConfiguredItem(Guid productId, string productName, decimal unitPriceTry, int quantity, decimal taxRatePercentage,
+        string configurationJson, string pricingSnapshotJson)
+    {
+        var item = new OrderItem(Id, productId, null, productName, unitPriceTry, quantity, taxRatePercentage);
+        item.SetConfiguration(configurationJson, pricingSnapshotJson);
+        _items.Add(item);
+        Recalculate();
+        return item;
+    }
+
     public void ApplyCoupon(string couponCode, decimal discountAmountTry)
     {
         CouponCode = couponCode;
@@ -129,8 +141,17 @@ public class OrderItem : BaseEntity
     public int Quantity { get; private set; }
     public decimal TaxRatePercentage { get; private set; }
 
+    public string? ConfigurationJson { get; private set; }
+    public string? PricingSnapshotJson { get; private set; }
+
     public decimal LineTotalTry => UnitPriceTry * Quantity;
     public decimal LineTaxTry => LineTotalTry * TaxRatePercentage / 100m;
+
+    internal void SetConfiguration(string configurationJson, string pricingSnapshotJson)
+    {
+        ConfigurationJson = configurationJson;
+        PricingSnapshotJson = pricingSnapshotJson;
+    }
 
     private OrderItem() { }
 

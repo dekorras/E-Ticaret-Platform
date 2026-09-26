@@ -69,6 +69,9 @@ else
             <li class="nav-item">
                 <button class="nav-link @(_activeTab == "ozellikler" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#tab-ozellikler" type="button" @onclick='() => _activeTab = "ozellikler"'>Özellikler</button>
             </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "duvar-kagidi" ? "active" : "")" data-bs-toggle="tab" data-bs-target="#tab-duvar-kagidi" type="button" @onclick='() => _activeTab = "duvar-kagidi"'>Duvar Kağıdı</button>
+            </li>
         }
     </ul>
 
@@ -584,6 +587,14 @@ else
         {
             <p class="text-danger mt-1">@_attributeError</p>
         }
+        </div>
+
+        <div class="tab-pane @(_activeTab == "duvar-kagidi" ? "show active" : "")" id="tab-duvar-kagidi">
+            @* Sekme açılınca yüklenir (her ürün düzenlemede gereksiz sorgu olmasın). *@
+            @if (_activeTab == "duvar-kagidi" && Id is Guid wallProductId)
+            {
+                <Dekorras.Storefront.Components.Admin.Pages.WallCovering.WallProductTab ProductId="wallProductId" />
+            }
         </div>
     }
     </div>

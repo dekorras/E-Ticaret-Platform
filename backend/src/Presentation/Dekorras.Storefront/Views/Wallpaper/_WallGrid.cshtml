@@ -1,0 +1,14 @@
+@model WallCatalogResult
+@if (Model.Items.Count == 0)
+{
+    <p class="text-muted py-4" data-wall-empty>Bu filtrelere uygun poster bulunamadı. Filtreleri azaltmayı deneyin.</p>
+}
+else
+{
+    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3" data-wall-grid data-page="@Model.Page" data-total-pages="@Model.TotalPages">
+        @foreach (var item in Model.Items)
+        {
+            <partial name="~/Views/Wallpaper/_WallCard.cshtml" model="item" />
+        }
+    </div>
+}

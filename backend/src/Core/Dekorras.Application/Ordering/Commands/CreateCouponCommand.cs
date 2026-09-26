@@ -11,7 +11,8 @@ public sealed record CreateCouponCommand(
     decimal DiscountValue,
     DateTime ValidFromUtc,
     DateTime ValidToUtc,
-    int? UsageLimit) : IRequest<Guid>;
+    int? UsageLimit,
+    int? PerUserLimit = null) : IRequest<Guid>;
 
 public sealed class CreateCouponCommandValidator : AbstractValidator<CreateCouponCommand>
 {
@@ -37,6 +38,7 @@ public sealed class CreateCouponCommandHandler(IUnitOfWork unitOfWork) : IReques
             throw new InvalidOperationException($"'{normalizedCode}' kodlu bir kupon zaten var.");
 
         var coupon = new Coupon(normalizedCode, request.DiscountType, request.DiscountValue, request.ValidFromUtc, request.ValidToUtc, request.UsageLimit);
+        coupon.SetPerUserLimit(request.PerUserLimit);
         await unitOfWork.Repository<Coupon>().AddAsync(coupon, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

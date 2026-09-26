@@ -4,7 +4,47 @@
 @model ProductDetailViewModel
 @section Styles {
     <link rel="stylesheet" href="~/css/product-detail.css" asp-append-version="true" />
+    @if (Model.Wall is { } wallSeo)
+    {
+        <link rel="stylesheet" href="~/lib/cropperjs/cropper.min.css" />
+        @* Canonical: konfigüratör parametreleri (ölçü/malzeme/kırpma) DAHİL EDİLMEZ - spec 1.11 *@
+        <link rel="canonical" href="@wallSeo.CanonicalUrl" />
+        <meta property="og:type" content="product" />
+        <meta property="og:title" content="@wallSeo.Product.Title" />
+        <meta property="og:url" content="@wallSeo.CanonicalUrl" />
+        @if (wallSeo.Product.ThumbUrl is not null)
+        {
+            <meta property="og:image" content="@($"{Context.Request.Scheme}://{Context.Request.Host}{wallSeo.Product.ThumbUrl}")" />
+        }
+        @Html.Raw("<script type=\"application/ld+json\">" + System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "Product",
+            ["name"] = wallSeo.Product.Title,
+            ["sku"] = Model.Product.ProductCode,
+            ["image"] = wallSeo.Product.ThumbUrl is null ? null : $"{Context.Request.Scheme}://{Context.Request.Host}{wallSeo.Product.ThumbUrl}",
+            ["description"] = wallSeo.Product.MetaDescription ?? $"{wallSeo.Product.Title} - ölçünüze özel üretilen duvar kağıdı / poster.",
+            ["brand"] = new Dictionary<string, object> { ["@type"] = "Brand", ["name"] = Model.Product.BrandName ?? "Dekorras" },
+            ["offers"] = new Dictionary<string, object?>
+            {
+                ["@type"] = "Offer",
+                ["url"] = wallSeo.CanonicalUrl,
+                ["priceCurrency"] = "TRY",
+                ["price"] = wallSeo.Product.FromPricePerM2.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                ["availability"] = "https://schema.org/InStock",
+                ["priceSpecification"] = new Dictionary<string, object>
+                {
+                    ["@type"] = "UnitPriceSpecification",
+                    ["price"] = wallSeo.Product.FromPricePerM2.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                    ["priceCurrency"] = "TRY",
+                    ["unitCode"] = "MTK",
+                    ["valueAddedTaxIncluded"] = false
+                }
+            }
+        }, new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default }) + "</script>")
+    }
 }
+
 @{
     var product = Model.Product;
     var imageUrls = product.ImageUrls.ToList();
@@ -37,10 +77,20 @@
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">@Localizer["Anasayfa"]</a></li>
+        @if (Model.Wall is not null)
+        {
+            <li class="breadcrumb-item"><a href="/duvar-kagitlari">Duvar Kağıtları</a></li>
+        }
         <li class="breadcrumb-item active" aria-current="page">@product.Name</li>
     </ol>
 </nav>
 
+@if (Model.Wall is not null)
+{
+    <partial name="_WallConfigurator" model="Model.Wall" />
+}
+else
+{
 <div class="row">
     <div class="col-md-8">
         @if (imageUrls.Count > 0)
@@ -199,6 +249,7 @@
         </div>
     </div>
 </div>
+}
 
 <div class="row mt-5">
     <div class="col-md-8">
@@ -329,4 +380,10 @@
 
 @section Scripts {
     <script src="~/js/product-zoom.js" asp-append-version="true"></script>
+    @if (Model.Wall is not null)
+    {
+        <script src="~/lib/cropperjs/cropper.min.js"></script>
+        <script src="~/js/wall/configurator.js" asp-append-version="true"></script>
+        <script src="~/js/wall/design-request.js" asp-append-version="true"></script>
+    }
 }

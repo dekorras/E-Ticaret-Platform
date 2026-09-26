@@ -1,0 +1,49 @@
+@model WallCardDto
+@{
+    var detailUrl = Url.Action("Details", "Product", new { slug = Model.Slug });
+    // Oran bilinmiyorsa (görsel henüz işlenmedi) 4:3 yer tutucu; kartlar ızgarada zıplamasın.
+    var ratio = Model.AspectRatio > 0 ? Model.AspectRatio.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) : "1.3333";
+    string? srcset = Model.ListUrl is not null && Model.ListUrl != Model.ThumbUrl ? $"{Model.ThumbUrl} 400w, {Model.ListUrl} 800w" : null;
+    var lqipStyle =string.IsNullOrEmpty(Model.LqipBase64) ? "" : $"background-image:url('data:image/jpeg;base64,{Model.LqipBase64}')";
+}
+<div class="col">
+    <article class="wall-card" data-wall-card data-product-id="@Model.ProductId" data-slug="@Model.Slug" data-title="@Model.Title" data-thumb="@Model.ThumbUrl">
+        <a href="@detailUrl" class="wall-card-media" style="--wall-ratio:@ratio;@lqipStyle">
+            @if (Model.ThumbUrl is not null)
+            {
+                <img class="wall-card-img" src="@Model.ThumbUrl" srcset="@srcset" sizes="@(srcset is null ? null : "(max-width: 576px) 50vw, (max-width: 992px) 33vw, 25vw")"
+                     alt="@Model.Title" loading="lazy" decoding="async" />
+            }
+            else
+            {
+                <span class="wall-card-noimg">Görsel yok</span>
+            }
+            @if (Model.SceneThumbUrl is not null)
+            {
+                <img class="wall-card-scene" src="@Model.SceneThumbUrl" alt="" aria-hidden="true" loading="lazy" decoding="async" />
+            }
+        </a>
+        <button type="button" class="wall-card-fav" data-fav-toggle aria-pressed="false" aria-label="Favorilere ekle" title="Favorilere ekle">
+            <i class="bi bi-heart" aria-hidden="true"></i>
+        </button>
+        <div class="wall-card-body">
+            <h3 class="wall-card-title"><a href="@detailUrl">@Model.Title</a></h3>
+            <p class="wall-card-price">@Html.Money(Model.FromPricePerM2)/m²'den başlayan</p>
+            @if (Model.Colors.Count > 0)
+            {
+                <div class="wall-card-colors" aria-label="Baskın renkler">
+                    @foreach (var color in Model.Colors.Take(5))
+                    {
+                        <span class="wall-color-dot" style="background:@color" title="@color"></span>
+                    }
+                </div>
+            }
+            <div class="wall-card-actions">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-tryon-toggle aria-pressed="false">
+                    <i class="bi bi-plus-square" aria-hidden="true"></i> <span>Duvarımda Dene</span>
+                </button>
+                <wall-preview-link product="@Model.Slug" variant="icon" source="kart" />
+            </div>
+        </div>
+    </article>
+</div>

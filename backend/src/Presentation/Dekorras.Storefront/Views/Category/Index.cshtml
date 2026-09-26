@@ -23,6 +23,18 @@
     <p class="text-muted">@category.Description</p>
 }
 
+@if (ViewBag.HasWallProducts is true)
+{
+    <div class="alert alert-light border d-flex flex-wrap align-items-center gap-3 mb-4" data-wall-category-banner>
+        <i class="bi bi-magic fs-3 text-primary"></i>
+        <div class="flex-grow-1">
+            <strong>@Localizer["Ölçünüze özel üretim, odanızda deneyin"]</strong>
+            <div class="small text-muted">@Localizer["Duvar ölçünüzü girin, fiyatı anında görün; \"Duvarında Gör\" ile odanızda nasıl duracağına bakın, beğendiklerinizi \"Duvarımda Dene\" listesine ekleyip karşılaştırın."]</div>
+        </div>
+        <a class="btn btn-primary" href="/duvar-kagitlari">@Localizer["Görsel kataloğa git"]</a>
+    </div>
+}
+
 @* Ürün listeleme düzeni: üstte araç çubuğu (sayfalama + görünüm/sütun kontrolleri), altında
    solda kriterler (kenar çubuğu) / sağda ürünler - kullanıcı isteği, bkz. backend/README.md. *@
 <div data-dk-product-listing>

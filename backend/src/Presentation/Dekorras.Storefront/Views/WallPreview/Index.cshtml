@@ -1,0 +1,214 @@
+@model WallVisualizerModel
+@using Dekorras.Domain.WallCovering
+@using System.Globalization
+@{
+    Layout = Model.IsModal || Model.IsEmbed ? "_WallBareLayout" : "_Layout";
+    ViewData["Title"] = $"{Model.Product.Title} - Duvarında Gör";
+    ViewData["MetaRobots"] = "noindex, follow";
+    var c = Model.Configuration;
+    var tr = CultureInfo.GetCultureInfo("tr-TR");
+    var isPattern = Model.Product.ProductType == "Pattern";
+    var productUrl = Url.Action("Details", "Product", new { slug = Model.Product.Slug });
+}
+@section Styles {
+    @if (!Model.IsModal && !Model.IsEmbed)
+    {
+        <link rel="canonical" href="@($"{Context.Request.Scheme}://{Context.Request.Host}{productUrl}")" />
+    }
+}
+
+<div class="wall-viz @(Model.IsModal || Model.IsEmbed ? "is-framed" : "")" data-wall-visualizer>
+    <script type="application/json" id="wallVizData">@Html.Raw(Model.ToClientJson())</script>
+    @Html.AntiForgeryToken()
+
+    <header class="wall-viz-head">
+        <div class="wall-viz-title">
+            <span class="text-muted small">Duvarında Gör</span>
+            <h1 class="h5 mb-0" data-viz-title>@Model.Product.Title</h1>
+        </div>
+        <div class="wall-viz-actions">
+            <button type="button" class="btn btn-sm btn-outline-danger" data-viz-reset title="Ölçü, malzeme, kırpma, ayna, filtre ve hizayı başlangıç değerlerine döndürür"><i class="bi bi-arrow-counterclockwise"></i><span class="d-none d-md-inline"> Ayarları sıfırla</span></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-viz-share><i class="bi bi-share"></i><span class="d-none d-md-inline"> Bağlantıyı paylaş</span></button>
+            @if (!Model.External)
+            {
+            <a class="btn btn-sm btn-outline-secondary" href="@Model.ServerRenderUrl()&download=1" data-viz-download download><i class="bi bi-download"></i><span class="d-none d-md-inline"> Görseli indir</span></a>
+            }
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-viz-fullscreen><i class="bi bi-arrows-fullscreen"></i><span class="visually-hidden">Tam ekran</span></button>
+            @if (Model.IsModal || Model.IsEmbed)
+            {
+                <button type="button" class="btn btn-sm btn-dark" data-viz-close aria-label="Kapat"><i class="bi bi-x-lg"></i></button>
+            }
+            else if (Model.ReturnUrl is not null)
+            {
+                <a class="btn btn-sm btn-dark" href="@Model.ReturnUrl"><i class="bi bi-arrow-left"></i> Geri dön</a>
+            }
+            else
+            {
+                <a class="btn btn-sm btn-dark" href="@productUrl" data-viz-product-link><i class="bi bi-arrow-left"></i> Ürüne dön</a>
+            }
+        </div>
+    </header>
+
+    <div class="wall-viz-body @(Model.External ? "no-list" : "")">
+        @if (!Model.External)
+        {
+        <aside class="wall-viz-list" aria-label="Poster listesi">
+            <ul class="nav nav-tabs nav-fill small" role="tablist">
+                <li class="nav-item" role="presentation"><button class="nav-link @(Model.OpenListTab ? "active" : "")" type="button" role="tab" data-viz-tab="tryon" aria-selected="@(Model.OpenListTab ? "true" : "false")">Denediklerim</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" type="button" role="tab" data-viz-tab="favorites" aria-selected="false">Favorilerim</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link @(Model.OpenListTab ? "" : "active")" type="button" role="tab" data-viz-tab="all" aria-selected="@(Model.OpenListTab ? "false" : "true")">Tüm ürünler</button></li>
+            </ul>
+            <div class="wall-viz-search" data-viz-search-box>
+                <select class="form-select form-select-sm mb-1" aria-label="Kategori" data-viz-category><option value="">Tüm kategoriler</option></select>
+                <input type="search" class="form-control form-control-sm" placeholder="Ürün ara" aria-label="Ürün ara" data-viz-search />
+            </div>
+            <ol class="wall-viz-items" data-viz-items aria-live="polite"></ol>
+            <div class="wall-viz-list-hint small text-muted">← → ile önceki/sonraki poster</div>
+        </aside>
+        }
+
+        <main class="wall-viz-stage">
+            <div class="wall-viz-viewport" data-viz-viewport tabindex="0" aria-label="Duvar önizlemesi - yakınlaştırmak için + / −, kaydırmak için sürükleyin">
+                <div class="wall-viz-zoom" data-viz-zoom>
+                    <canvas data-viz-canvas role="img" aria-label="@Model.Product.Title seçilen odanın duvarında"></canvas>
+                    <noscript>
+                        <img src="@Model.ServerRenderUrl()" alt="@Model.Product.Title seçilen odanın duvarında" class="img-fluid" />
+                    </noscript>
+                </div>
+                <div class="wall-viz-loading" data-viz-loading><div class="spinner-border text-light" role="status"><span class="visually-hidden">Yükleniyor</span></div></div>
+                <div class="wall-viz-zoom-tools">
+                    <button type="button" class="btn btn-light btn-sm" data-viz-zoom-in aria-label="Yakınlaştır"><i class="bi bi-zoom-in"></i></button>
+                    <button type="button" class="btn btn-light btn-sm" data-viz-zoom-out aria-label="Uzaklaştır"><i class="bi bi-zoom-out"></i></button>
+                    <button type="button" class="btn btn-light btn-sm" data-viz-zoom-reset aria-label="Sıfırla"><i class="bi bi-aspect-ratio"></i></button>
+                </div>
+            </div>
+            <div class="alert alert-warning py-1 px-2 small mt-2 mb-0" data-viz-clipped hidden role="status"></div>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                <button type="button" class="btn btn-sm btn-outline-primary" data-viz-crop-open hidden><i class="bi bi-crop"></i> Baskı alanını seç</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-viz-edit-mask hidden><i class="bi bi-bounding-box-circles"></i> Duvarın önündeki eşyaları işaretle</button>
+            </div>
+
+            <div class="wall-viz-scenes" role="radiogroup" aria-label="Oda sahnesi">
+                @foreach (var s in Model.Scenes)
+                {
+                    <button type="button" class="wall-viz-scene @(s.Id == Model.Scene.Id ? "is-active" : "")" role="radio" aria-checked="@(s.Id == Model.Scene.Id ? "true" : "false")" data-viz-scene="@s.Id" title="@s.Name">
+                        <img src="@s.BaseImageUrl" alt="" loading="lazy" />
+                        <span>@s.Name</span>
+                    </button>
+                }
+                @if (!Model.IsEmbed)
+                {
+                <a class="wall-viz-scene wall-viz-scene-upload" href="#" data-viz-upload-room>
+                    <i class="bi bi-camera"></i><span>Kendi odamı yükle</span>
+                </a>
+                }
+            </div>
+        </main>
+
+        <aside class="wall-viz-controls">
+            @* JS'siz yedek: GET formu aynı sayfayı sunucu render'ıyla yeniden yükler. *@
+            <form method="get" action="/duvarinda-gor" data-viz-form>
+                <input type="hidden" name="product" value="@Model.Product.Slug" data-viz-product />
+                <input type="hidden" name="scene" value="@Model.Scene.Id" data-viz-scene-value />
+                <input type="hidden" name="crop" value="@c.Crop?.ToQueryValue()" data-viz-crop />
+                @if (Model.ReturnUrl is not null) { <input type="hidden" name="return" value="@Model.ReturnUrl" /> }
+                @if (Model.IsModal) { <input type="hidden" name="modal" value="1" /> }
+
+                <fieldset class="mb-3">
+                    <legend class="wall-filter-legend">Duvar ölçüsü</legend>
+                    <div class="d-flex gap-1 mb-2" role="radiogroup" aria-label="Birim">
+                        @foreach (var (code, label) in new[] { ("cm", "cm"), ("m", "m"), ("in", "inç"), ("ft", "ft") })
+                        {
+                            <input type="radio" class="btn-check" name="unit" id="viz-unit-@code" value="@code" checked="@(WallDimensions.UnitCode(c.Unit) == code)" data-viz-unit />
+                            <label class="btn btn-sm btn-outline-secondary" for="viz-unit-@code">@label</label>
+                        }
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small mb-0" for="vizW">En</label>
+                            <input id="vizW" name="w" class="form-control form-control-sm" inputmode="decimal" value="@WallDimensions.FromCm(c.WidthCm, c.Unit).ToString("0.##", tr)" data-viz-w />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0" for="vizH">Boy</label>
+                            <input id="vizH" name="h" class="form-control form-control-sm" inputmode="decimal" value="@WallDimensions.FromCm(c.HeightCm, c.Unit).ToString("0.##", tr)" data-viz-h />
+                        </div>
+                    </div>
+                    <div class="invalid-feedback d-block small" data-viz-error></div>
+                </fieldset>
+
+                <div class="mb-3">
+                    <label class="wall-filter-legend d-block" for="vizMaterial">Malzeme</label>
+                    <select id="vizMaterial" name="material" class="form-select form-select-sm" data-viz-material>
+                        @foreach (var m in Model.Materials)
+                        {
+                            <option value="@m.Code" selected="@(m.Code == c.MaterialCode)">@m.Name - @Html.MoneyText(m.PricePerM2)/m²</option>
+                        }
+                    </select>
+                </div>
+
+                @if (!isPattern)
+                {
+                    <fieldset class="mb-2">
+                        <legend class="wall-filter-legend">Görseli uydur</legend>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <input type="radio" class="btn-check" name="fit" id="viz-fit-crop" value="crop" checked="@(c.Fit == FitMode.Crop)" data-viz-fit />
+                            <label class="btn btn-outline-secondary" for="viz-fit-crop">Kırp</label>
+                            <input type="radio" class="btn-check" name="fit" id="viz-fit-stretch" value="stretch" checked="@(c.Fit == FitMode.Stretch)" data-viz-fit />
+                            <label class="btn btn-outline-secondary" for="viz-fit-stretch">Esnet</label>
+                        </div>
+                    </fieldset>
+                }
+                <fieldset class="mb-2">
+                    <legend class="wall-filter-legend">Duvardaki hiza</legend>
+                    <div class="btn-group btn-group-sm" role="group">
+                        @foreach (var (code, label) in new[] { ("left", "Sol"), ("center", "Orta"), ("right", "Sağ") })
+                        {
+                            <input type="radio" class="btn-check" name="align" id="viz-align-@code" value="@code" checked="@(Model.AlignCode == code)" data-viz-align />
+                            <label class="btn btn-outline-secondary" for="viz-align-@code">@label</label>
+                        }
+                    </div>
+                </fieldset>
+                <div class="d-flex flex-wrap gap-3 mb-2">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="mirror" value="1" id="vizMirror" checked="@c.Mirror" data-viz-mirror />
+                        <label class="form-check-label small" for="vizMirror">Ayna</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="vizPanels" data-viz-panels />
+                        <label class="form-check-label small" for="vizPanels">Panel çizgileri</label>
+                    </div>
+                </div>
+                <div class="btn-group btn-group-sm mb-3" role="radiogroup" aria-label="Filtre">
+                    @foreach (var (value, label) in new[] { ("none", "Renkli"), ("grayscale", "S-B"), ("sepia", "Sepya") })
+                    {
+                        <input type="radio" class="btn-check" name="filter" id="viz-filter-@value" value="@value" checked="@(c.Filter.ToString().ToLowerInvariant() == value)" data-viz-filter />
+                        <label class="btn btn-outline-secondary" for="viz-filter-@value">@label</label>
+                    }
+                </div>
+                <noscript><button type="submit" class="btn btn-secondary btn-sm w-100 mb-3">Önizlemeyi güncelle</button></noscript>
+            </form>
+
+            <div class="wall-summary small" aria-live="polite" hidden="@Model.External">
+                <div class="d-flex justify-content-between"><span>Faturalanan alan</span><strong data-viz-sum="billed">–</strong></div>
+                <div class="d-flex justify-content-between"><span>Panel</span><strong data-viz-sum="panels">–</strong></div>
+                <div class="d-flex justify-content-between"><span>Ara toplam (KDV hariç)</span><strong data-viz-sum="subtotal">–</strong></div>
+                <div class="d-flex justify-content-between"><span>KDV</span><strong data-viz-sum="tax">–</strong></div>
+                <div class="d-flex justify-content-between fs-6 mt-1"><span>Toplam</span><strong data-viz-sum="total">–</strong></div>
+                <div class="text-muted" data-viz-sum="note"></div>
+            </div>
+            <div class="d-grid gap-2 mt-3">
+                <button type="button" class="btn btn-primary" data-viz-add-to-cart><i class="bi bi-cart-plus"></i> Bu tasarımla sepete ekle</button>
+                @if (Model.ReturnUrl is not null || Model.IsModal || Model.IsEmbed)
+                {
+                    <button type="button" class="btn btn-outline-dark" data-viz-apply><i class="bi bi-check2"></i> Bu ayarlarla devam et</button>
+                }
+                <a class="btn btn-link btn-sm" hidden="@Model.External" href="@productUrl" data-viz-product-link target="@(Model.IsModal || Model.IsEmbed ? "_top" : null)">Ürün sayfasına git</a>
+            </div>
+        </aside>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/wall/room-upload.js" asp-append-version="true"></script>
+    <script src="~/js/wall/wall-visualizer.js" asp-append-version="true"></script>
+}

@@ -30,6 +30,29 @@ else
         <tbody>
             @foreach (var item in Model.Items)
             {
+                @if (item.RequiresConfiguration)
+                {
+                    @* Konfigüratörden önce ölçüsüz eklenmiş (eski sabit fiyatlı) duvar kağıdı/poster: toplama katılmaz,
+                       siparişe dönüştürülemez; müşteri ölçüsünü seçip yeniden ekler ya da kaldırır. *@
+                    <tr class="table-warning" data-wall-legacy-line>
+                        <td colspan="4">
+                            <a asp-controller="Product" asp-action="Details" asp-route-slug="@item.Slug">@item.Name</a>
+                            <div class="small mt-1">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                @Localizer["Bu ürün artık duvarınızın ölçüsüne göre üretiliyor ve fiyatı ölçüye göre hesaplanıyor. Ölçü seçilmeden eklendiği için toplama katılmadı; lütfen ölçünüzü seçip yeniden ekleyin."]
+                            </div>
+                            <a class="btn btn-sm btn-primary mt-2" asp-controller="Product" asp-action="Details" asp-route-slug="@item.Slug">@Localizer["Ölçünü Seç"]</a>
+                        </td>
+                        <td>
+                            <form asp-controller="Cart" asp-action="Remove" method="post">
+                                <input type="hidden" name="productId" value="@item.ProductId" />
+                                <input type="hidden" name="variantId" value="@item.VariantId" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger">@Localizer["Kaldır"]</button>
+                            </form>
+                        </td>
+                    </tr>
+                    continue;
+                }
                 <tr>
                     <td>
                         <a asp-controller="Product" asp-action="Details" asp-route-slug="@item.Slug">@item.Name</a>
@@ -37,12 +60,25 @@ else
                         {
                             <div class="text-muted small">@item.VariantOptionName</div>
                         }
+                        @if (item.Configuration is { } cfg)
+                        {
+                            <div class="text-muted small" data-wall-config>
+                                @cfg.WidthCm.ToString("0.#") × @cfg.HeightCm.ToString("0.#") cm · @cfg.MaterialName
+                                · @(cfg.Fit == "Stretch" ? "Esnet" : "Kırp")@(cfg.Mirror ? " · Ayna" : "")@(cfg.Filter == "Grayscale" ? " · Siyah-Beyaz" : cfg.Filter == "Sepia" ? " · Sepya" : "")
+                                <br />@cfg.BilledAreaM2.ToString("0.##") m² faturalanan (kesim payı dahil) · @cfg.PanelCount panel
+                                <br /><wall-preview-link product="@item.Slug" config="@(Dekorras.Domain.WallCovering.WallConfiguration.FromJson(cfg.ConfigurationJson))" variant="text" source="sepet" />
+                            </div>
+                        }
                     </td>
                     <td>@Html.Money(item.UnitPriceTry)</td>
                     <td style="max-width: 120px;">
                         <form asp-controller="Cart" asp-action="UpdateQuantity" method="post" class="d-flex gap-1">
                             <input type="hidden" name="productId" value="@item.ProductId" />
                             <input type="hidden" name="variantId" value="@item.VariantId" />
+                            @if (item.Configuration is not null)
+                            {
+                                <input type="hidden" name="cartItemId" value="@item.CartItemId" />
+                            }
                             <input type="number" name="quantity" value="@item.Quantity" min="1" class="form-control form-control-sm" />
                             <button type="submit" class="btn btn-sm btn-outline-secondary">@Localizer["Güncelle"]</button>
                         </form>
@@ -52,6 +88,10 @@ else
                         <form asp-controller="Cart" asp-action="Remove" method="post">
                             <input type="hidden" name="productId" value="@item.ProductId" />
                             <input type="hidden" name="variantId" value="@item.VariantId" />
+                            @if (item.Configuration is not null)
+                            {
+                                <input type="hidden" name="cartItemId" value="@item.CartItemId" />
+                            }
                             <button type="submit" class="btn btn-sm btn-outline-danger">@Localizer["Kaldır"]</button>
                         </form>
                     </td>
@@ -64,6 +104,14 @@ else
                 <td>@Html.Money(Model.SubTotalTry)</td>
                 <td></td>
             </tr>
+            @if (Model.GlueDiscountTry > 0)
+            {
+                <tr>
+                    <td colspan="3" class="text-end">Ücretsiz tutkal</td>
+                    <td class="text-success">-@Html.Money(Model.GlueDiscountTry)</td>
+                    <td></td>
+                </tr>
+            }
             @if (Model.CouponCode is not null)
             {
                 <tr>
@@ -105,6 +153,36 @@ else
             </tr>
         </tfoot>
     </table>
+
+    @if (Model.FreeShipping)
+    {
+        <div class="alert alert-success py-2">Kargo ücretsiz.</div>
+    }
+    else if (Model.FreeShippingRemainingTry is decimal remaining && remaining > 0)
+    {
+        <div class="alert alert-info py-2">Ücretsiz kargo için <strong>@Html.Money(remaining)</strong> daha ekleyin.</div>
+    }
+
+    @foreach (var glue in Model.GlueSuggestions ?? [])
+    {
+        <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2" data-glue-suggestion>
+            <span>Seçtiğiniz malzeme uygulama için tutkal gerektirir: <strong>@glue.Name</strong>
+                @if (glue.WillBeFree)
+                {
+                    <span class="badge bg-success">Sepetinizde ücretsiz</span>
+                }
+                else
+                {
+                    <span>(@Html.Money(glue.UnitPriceTry))</span>
+                }
+            </span>
+            <form asp-controller="Cart" asp-action="Add" method="post" class="ms-auto">
+                <input type="hidden" name="productId" value="@glue.GlueProductId" />
+                <input type="hidden" name="quantity" value="@glue.SuggestedQuantity" />
+                <button type="submit" class="btn btn-sm btn-warning">Tutkal ekle (@glue.SuggestedQuantity adet)</button>
+            </form>
+        </div>
+    }
 
     <div class="row mb-3">
         <div class="col-md-4">

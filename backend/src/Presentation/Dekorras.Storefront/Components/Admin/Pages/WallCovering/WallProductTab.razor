@@ -1,0 +1,209 @@
+@* ProductEdit.razor "Duvar Kağıdı" sekmesi: profil (tür/tekrar/popülerlik), etiketler, ürün bazlı malzeme
+   fiyat istisnaları ve türev yeniden üretimi. Sayfa değil, ProductEdit'in etkileşimli render'ı içinde çalışır. *@
+@using Dekorras.Application.WallCovering
+@using Dekorras.Domain.WallCovering
+@inject MediatR.ISender Sender
+
+@if (_profile is null)
+{
+    <p>Yükleniyor...</p>
+    return;
+}
+
+@if (_message is not null) { <div class="alert alert-success">@_message</div> }
+@if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+
+<div class="row">
+    <div class="col-lg-7">
+        <h6>Profil</h6>
+        @if (!_profile.Exists)
+        {
+            <p class="text-muted small">Bu ürünün henüz duvar kağıdı profili yok. Kaydedince oluşturulur; görsel türevleri arka planda üretilir.</p>
+        }
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="wallEnabled" @bind="_enabled" />
+            <label class="form-check-label" for="wallEnabled">Ölçüye özel konfigüratör açık</label>
+        </div>
+        <div class="row g-2 mb-3">
+            <div class="col-md-4">
+                <label class="form-label">Tür</label>
+                <select class="form-select" @bind="_type">
+                    <option value="@WallProductType.Mural">Tek parça (mural)</option>
+                    <option value="@WallProductType.Pattern">Tekrarlı desen</option>
+                </select>
+            </div>
+            @if (_type == WallProductType.Pattern)
+            {
+                <div class="col-md-2"><label class="form-label">Tekrar eni (cm)</label><input type="number" step="0.1" class="form-control" @bind="_repeatW" /></div>
+                <div class="col-md-2"><label class="form-label">Tekrar boyu (cm)</label><input type="number" step="0.1" class="form-control" @bind="_repeatH" /></div>
+                <div class="col-md-2">
+                    <label class="form-label">Eşleşme</label>
+                    <select class="form-select" @bind="_repeatType">
+                        <option value="@RepeatType.Straight">Düz</option>
+                        <option value="@RepeatType.HalfDrop">Yarım kaydırma</option>
+                    </select>
+                </div>
+            }
+            <div class="col-md-2"><label class="form-label">Popülerlik</label><input type="number" class="form-control" @bind="_popularity" /></div>
+        </div>
+        <button class="btn btn-success mb-4" @onclick="SaveProfileAsync">Profili kaydet</button>
+
+        <h6>Etiketler</h6>
+        @foreach (var group in _tags.GroupBy(t => t.Group).OrderBy(g => g.Key))
+        {
+            <div class="mb-2">
+                <span class="text-muted small me-2">@WallTags.GroupLabel(group.Key):</span>
+                @foreach (var t in group.OrderBy(t => t.Label))
+                {
+                    var selected = _selectedTags.Contains(t.Id);
+                    <button type="button" class="btn btn-sm rounded-pill me-1 mb-1 @(selected ? "btn-primary" : "btn-outline-secondary")" @onclick="() => ToggleTag(t.Id)">
+                        @if (t.Hex is not null) { <span class="d-inline-block rounded-circle border me-1 align-middle" style="width:10px;height:10px;background:@t.Hex"></span> }
+                        @t.Label
+                    </button>
+                }
+            </div>
+        }
+        <button class="btn btn-success mb-4" disabled="@(!_tagsDirty)" @onclick="SaveTagsAsync">Etiketleri kaydet</button>
+
+        <h6>Malzeme fiyat istisnaları</h6>
+        <p class="text-muted small">Boş fiyat = malzemenin genel fiyatı. "Satışta" kapalıysa bu üründe o malzeme sunulmaz.</p>
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Malzeme</th><th>Genel ₺/m²</th><th style="width:160px">Bu ürün ₺/m²</th><th>Satışta</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var o in _overrides)
+                {
+                    <tr>
+                        <td>@o.Name <code class="small">@o.Code</code></td>
+                        <td>@o.BasePrice.ToString("N2")</td>
+                        <td><input type="number" step="0.01" class="form-control form-control-sm" @bind="o.Price" /></td>
+                        <td><input type="checkbox" class="form-check-input" @bind="o.IsAllowed" /></td>
+                        <td><button class="btn btn-sm btn-outline-primary" @onclick="() => SaveOverrideAsync(o)">Kaydet</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="col-lg-5">
+        <h6>Görsel</h6>
+        @if (_profile.Exists)
+        {
+            <dl class="row small mb-2">
+                <dt class="col-5">Orijinal</dt><dd class="col-7">@(_profile.ImageWidthPx > 0 ? $"{_profile.ImageWidthPx}×{_profile.ImageHeightPx} px" : "—")@(_profile.Dpi is { } dpi ? $", {dpi} DPI" : "")</dd>
+                <dt class="col-5">Türevler</dt><dd class="col-7">@(_profile.DerivativesGeneratedAtUtc?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "kuyrukta")</dd>
+                <dt class="col-5">Baskın renkler</dt>
+                <dd class="col-7">
+                    @foreach (var hex in (_profile.DominantColors ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        <span class="d-inline-block rounded border me-1" title="@hex" style="width:18px;height:18px;background:@hex"></span>
+                    }
+                </dd>
+            </dl>
+            <div class="d-flex gap-2 mb-2">
+                @if (_profile.ThumbUrl is not null) { <img src="@_profile.ThumbUrl" alt="" class="img-thumbnail" style="max-width:48%" /> }
+                @if (_profile.SceneThumbUrl is not null) { <img src="@_profile.SceneThumbUrl" alt="" class="img-thumbnail" style="max-width:48%" /> }
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => QueueAsync(false)">Türevleri yeniden üret</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => QueueAsync(true)" title="Ürünün ana görseli değiştiyse">Ana görselden yeniden al</button>
+            </div>
+        }
+        else
+        {
+            <p class="text-muted small">Profil oluşturulunca gösterilir.</p>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid ProductId { get; set; }
+
+    private sealed class OverrideRow
+    {
+        public Guid MaterialId { get; init; }
+        public string Code { get; init; } = "";
+        public string Name { get; init; } = "";
+        public decimal BasePrice { get; init; }
+        public decimal? Price { get; set; }
+        public bool IsAllowed { get; set; }
+    }
+
+    private WallpaperProfileAdminDto? _profile;
+    private IReadOnlyList<TagAdminDto> _tags = [];
+    private HashSet<Guid> _selectedTags = [];
+    private List<OverrideRow> _overrides = [];
+    private bool _enabled, _tagsDirty;
+    private WallProductType _type;
+    private decimal? _repeatW, _repeatH;
+    private RepeatType _repeatType;
+    private int _popularity;
+    private string? _message, _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _tags = await Sender.Send(new GetTagsAdminQuery());
+        _selectedTags = (await Sender.Send(new GetProductTagIdsQuery(ProductId))).ToHashSet();
+        _tagsDirty = false;
+        await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        _profile = await Sender.Send(new GetWallpaperProfileAdminQuery(ProductId));
+        _enabled = _profile.Exists ? _profile.IsEnabled : true;
+        _type = _profile.ProductType;
+        _repeatW = _profile.RepeatWidthCm;
+        _repeatH = _profile.RepeatHeightCm;
+        _repeatType = _profile.RepeatType;
+        _popularity = _profile.PopularityScore;
+        _overrides = _profile.Overrides.Select(o => new OverrideRow
+        {
+            MaterialId = o.MaterialId, Code = o.MaterialCode, Name = o.MaterialName, BasePrice = o.BasePricePerM2, Price = o.OverridePricePerM2, IsAllowed = o.IsAllowed
+        }).ToList();
+    }
+
+    private void ToggleTag(Guid id)
+    {
+        if (!_selectedTags.Remove(id)) _selectedTags.Add(id);
+        _tagsDirty = true;
+    }
+
+    private async Task RunAsync(Func<Task> action, string success)
+    {
+        _message = _error = null;
+        try
+        {
+            await action();
+            _message = success;
+        }
+        catch (Exception ex) { _error = AdminErrors.Message(ex); }
+    }
+
+    private Task SaveProfileAsync() => RunAsync(async () =>
+    {
+        var wasNew = !_profile!.Exists;
+        await Sender.Send(new SaveWallpaperProfileCommand(ProductId, _enabled, _type, _repeatW, _repeatH, _repeatType, _popularity));
+        await LoadProfileAsync();
+        // Yeni profilin türevleri arka plan işçisi tarafından üretilir (DerivativesGeneratedAtUtc boş).
+        if (wasNew) _message = "Profil oluşturuldu; görsel türevleri birkaç dakika içinde üretilecek.";
+    }, "Profil kaydedildi.");
+
+    private Task SaveTagsAsync() => RunAsync(async () =>
+    {
+        await Sender.Send(new SetProductTagsCommand(ProductId, _selectedTags.ToList()));
+        _tagsDirty = false;
+    }, "Etiketler kaydedildi.");
+
+    private Task SaveOverrideAsync(OverrideRow o) => RunAsync(async () =>
+    {
+        if (o.Price is <= 0) throw new InvalidOperationException("Fiyat sıfırdan büyük olmalı (genel fiyat için boş bırakın).");
+        await Sender.Send(new SetMaterialOverrideCommand(ProductId, o.MaterialId, o.Price, o.IsAllowed));
+        await LoadProfileAsync();
+    }, "Malzeme istisnası kaydedildi.");
+
+    private Task QueueAsync(bool reloadOriginal) => RunAsync(async () =>
+    {
+        await Sender.Send(new QueueDerivativesCommand(ProductId, reloadOriginal));
+        await LoadProfileAsync();
+    }, "Kuyruğa alındı; arka planda yeniden üretilecek.");
+}

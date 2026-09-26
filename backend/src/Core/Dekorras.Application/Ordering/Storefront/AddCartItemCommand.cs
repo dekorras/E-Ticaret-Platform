@@ -28,6 +28,10 @@ public sealed class AddCartItemCommandHandler(IUnitOfWork unitOfWork) : IRequest
         if (product.Status != ProductStatus.Active)
             throw new InvalidOperationException("Bu ürün şu anda satışa kapalıdır.");
 
+        // Ölçüye özel duvar kağıdı ölçüsüz (ürünün eski sabit fiyatıyla) sepete giremez; müşteri ölçü seçmeli.
+        if (unitOfWork.Repository<Dekorras.Domain.WallCovering.WallpaperProfile>().Query().Any(p => p.ProductId == product.Id && p.IsEnabled))
+            throw new WallCovering.WallConfigurationRequiredException(product.Slug);
+
         var quantity = Math.Max(request.Quantity, product.MinimumOrderQuantity);
 
         var unitPriceTry = ProductPricingHelper.ResolveUnitPriceTry(unitOfWork, product.Id, product.BasePriceTry, quantity, request.CustomerGroupId);

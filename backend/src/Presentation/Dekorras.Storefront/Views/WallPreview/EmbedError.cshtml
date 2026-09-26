@@ -1,0 +1,10 @@
+@model string
+@{
+    Layout = "_WallBareLayout";
+    ViewData["Title"] = "Duvarında Gör";
+}
+<div class="d-flex flex-column align-items-center justify-content-center text-center p-4" style="min-height:60vh">
+    <i class="bi bi-exclamation-circle fs-1 text-warning" aria-hidden="true"></i>
+    <p class="mt-2 mb-3">@Model</p>
+    <button type="button" class="btn btn-sm btn-dark" onclick="window.parent !== window && window.parent.postMessage({ source: 'dekorras-wall', type: 'wallpreview:close' }, '*')">Kapat</button>
+</div>

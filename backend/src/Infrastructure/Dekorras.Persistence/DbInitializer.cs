@@ -46,6 +46,8 @@ public static class DbInitializer
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
+        await WallCoveringSeed.SeedAsync(dbContext, cancellationToken);
+
         await SeedAdminUserAsync(dbContext, userManager, cancellationToken);
     }
 

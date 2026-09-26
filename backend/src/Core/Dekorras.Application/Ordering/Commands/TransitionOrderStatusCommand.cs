@@ -26,6 +26,15 @@ public sealed class TransitionOrderStatusCommandHandler(IUnitOfWork unitOfWork)
         var order = await repository.GetByIdAsync(request.OrderId, cancellationToken)
             ?? throw new KeyNotFoundException($"'{request.OrderId}' numaralı sipariş bulunamadı.");
 
+        // Ölçüye özel duvar kağıdı: müşteri onay önizlemelerini onaylamadan (veya otomatik onay süresi
+        // dolmadan) sipariş üretime (Hazırlanıyor) geçemez - spec 1.7.
+        if (request.NewStatus == OrderStatus.Preparing
+            && unitOfWork.Repository<Domain.WallCovering.ProductionProof>().Query()
+                .Any(p => p.OrderId == order.Id && p.Status != Domain.WallCovering.ProofStatus.Onaylandi))
+        {
+            throw new InvalidOperationException("Müşteri onay önizlemelerini onaylamadan sipariş üretime geçemez.");
+        }
+
         order.TransitionTo(request.NewStatus, request.Note);
         // Update(order) BİLİNÇLİ OLARAK çağrılmaz: order zaten bu DbContext tarafından izleniyor
         // ve TransitionTo yeni bir OrderStatusHistory ekliyor. Update() burada çağrılsaydı, EF

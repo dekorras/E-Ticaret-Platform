@@ -1,0 +1,125 @@
+@page "/admin/wall/embed-clients"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.WallCovering
+@inject MediatR.ISender Sender
+@inject NavigationManager Navigation
+
+<PageTitle>Embed İstemcileri</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">"Duvarında Gör" Embed İstemcileri</h4>
+    <button class="btn btn-primary" @onclick="() => _edit = new EmbedForm()">+ Yeni İstemci</button>
+</div>
+<p class="text-muted">Başka sitelerin widget'ı kullanabilmesi için izinli origin'leri (ör. <code>https://magaza.com</code>) ve harici görsel alan adlarını satır başına bir tane girin. Kota günlük görsel kaydı sayısıdır.</p>
+
+@if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+
+@if (_edit is not null)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4"><label class="form-label">Ad</label><input class="form-control" @bind="_edit.Name" /></div>
+                <div class="col-md-2"><label class="form-label">Günlük kota</label><input type="number" class="form-control" @bind="_edit.DailyQuota" /></div>
+                <div class="col-md-6"></div>
+                <div class="col-md-6"><label class="form-label">İzinli origin'ler</label><textarea class="form-control font-monospace" rows="3" @bind="_edit.AllowedOrigins"></textarea></div>
+                <div class="col-md-6"><label class="form-label">İzinli görsel alan adları</label><textarea class="form-control font-monospace" rows="3" @bind="_edit.AllowedImageHosts" placeholder="cdn.magaza.com"></textarea></div>
+            </div>
+            <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-success" @onclick="SaveAsync">Kaydet</button>
+                <button class="btn btn-light" @onclick="() => _edit = null">Vazgeç</button>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <div class="card-body">
+        <table class="table align-middle mb-0">
+            <thead><tr><th>Ad</th><th>Anahtar</th><th>Origin'ler</th><th>Bugün / kota</th><th>Durum</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _clients)
+                {
+                    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                    <tr>
+                        <td>@c.Name</td>
+                        <td><code>@c.PublicKey</code></td>
+                        <td class="small">@((MarkupString)string.Join("<br>", c.AllowedOrigins.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(System.Net.WebUtility.HtmlEncode)))</td>
+                        <td>@(c.UsageDate == today ? c.UsageCount : 0) / @c.DailyQuota</td>
+                        <td><span class="badge @(c.IsActive ? "bg-success-subtle text-success" : "bg-secondary-subtle text-secondary")">@(c.IsActive ? "Aktif" : "Pasif")</span></td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => _snippetFor = _snippetFor == c.Id ? null : c.Id">Kod</button>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(c)">Düzenle</button>
+                            <button class="btn btn-sm @(c.IsActive ? "btn-outline-warning" : "btn-outline-success")" @onclick="() => ToggleAsync(c)">@(c.IsActive ? "Pasife Al" : "Aktifleştir")</button>
+                        </td>
+                    </tr>
+                    @if (_snippetFor == c.Id)
+                    {
+                        <tr>
+                            <td colspan="6">
+                                <pre class="bg-light p-2 rounded small mb-0">@Snippet(c)</pre>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private sealed class EmbedForm
+    {
+        public Guid? Id { get; set; }
+        public string Name { get; set; } = "";
+        public string AllowedOrigins { get; set; } = "";
+        public string AllowedImageHosts { get; set; } = "";
+        public int DailyQuota { get; set; } = 1000;
+    }
+
+    private IReadOnlyList<EmbedClientAdminDto> _clients = [];
+    private EmbedForm? _edit;
+    private Guid? _snippetFor;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _clients = await Sender.Send(new GetEmbedClientsQuery());
+
+    private void Edit(EmbedClientAdminDto c) => _edit = new EmbedForm
+    {
+        Id = c.Id, Name = c.Name, AllowedOrigins = c.AllowedOrigins, AllowedImageHosts = c.AllowedImageHosts, DailyQuota = c.DailyQuota
+    };
+
+    private string _baseUrl = "";
+
+    protected override void OnParametersSet() => _baseUrl = Navigation.BaseUri.TrimEnd('/');
+
+    private string Snippet(EmbedClientAdminDto c) =>
+        $"""
+        <script src="{_baseUrl}/embed/duvarinda-gor.js" data-api-key="{c.PublicKey}" defer></script>
+        <!-- Dekorras kataloğundaki bir ürün: -->
+        <a data-duvarinda-gor data-product="urun-slug">Duvarında Gör</a>
+        <!-- Kendi görseliniz (izinli alan adından): -->
+        <a data-duvarinda-gor data-image="https://cdn.magaza.com/poster.jpg" data-width-cm="300" data-height-cm="250" data-type="mural">Duvarında Gör</a>
+        """;
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        try
+        {
+            await Sender.Send(new SaveEmbedClientCommand(_edit!.Id, _edit.Name, _edit.AllowedOrigins, _edit.AllowedImageHosts, _edit.DailyQuota));
+            _edit = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = AdminErrors.Message(ex); }
+    }
+
+    private async Task ToggleAsync(EmbedClientAdminDto c)
+    {
+        await Sender.Send(new SetEmbedClientActiveCommand(c.Id, !c.IsActive));
+        await LoadAsync();
+    }
+}

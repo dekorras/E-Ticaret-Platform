@@ -64,11 +64,10 @@
     border: none;
 }
 
-/* Hesabım/Sepetim üst satır butonları - dekorras.com'daki dolgulu/pill vurgusuyla tutarlı.
+/* Üst satır butonları (Hesabım, Duvarımda Dene, Karşılaştır, Sepetim) - dekorras.com'daki dolgulu/pill vurgusuyla tutarlı.
    Bootstrap'in ".text-dark" utility'si (!important ile) aynı elemanda olduğu için override
    etmek üzere burada da !important gerekiyor - başka bir yol yok, bilinçli bir istisna. */
-.dk-header .navbar-nav > li.dropdown > a.nav-link,
-.dk-header .navbar-nav > li.nav-item:last-child > a.nav-link {
+.dk-header .navbar-nav > li.nav-item > a.nav-link {
     background-color: var(--dk-color-primary);
     color: #fff !important;
     border-radius: 999px;
@@ -76,8 +75,7 @@
     transition: background-color var(--dk-transition);
 }
 
-.dk-header .navbar-nav > li.dropdown > a.nav-link:hover,
-.dk-header .navbar-nav > li.nav-item:last-child > a.nav-link:hover {
+.dk-header .navbar-nav > li.nav-item > a.nav-link:hover {
     background-color: var(--dk-color-primary-dark);
     color: #fff !important;
 }

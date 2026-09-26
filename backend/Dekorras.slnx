@@ -15,6 +15,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Dekorras.Application.Tests/Dekorras.Application.Tests.csproj" />
     <Project Path="tests/Dekorras.Domain.Tests/Dekorras.Domain.Tests.csproj" />
+    <Project Path="tests/Dekorras.E2ETests/Dekorras.E2ETests.csproj" />
     <Project Path="tests/Dekorras.IntegrationTests/Dekorras.IntegrationTests.csproj" />
   </Folder>
   <Folder Name="/tools/">

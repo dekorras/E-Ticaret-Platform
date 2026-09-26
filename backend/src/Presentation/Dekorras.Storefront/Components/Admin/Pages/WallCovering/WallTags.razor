@@ -1,0 +1,125 @@
+@page "/admin/wall/tags"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.WallCovering
+@using Dekorras.Domain.WallCovering
+@inject MediatR.ISender Sender
+
+<PageTitle>Duvar Kağıdı Etiketleri</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Duvar Kağıdı Etiketleri</h4>
+</div>
+<p class="text-muted">Katalog filtreleri bu etiketlerden oluşur. Değer URL'de ve toplu yükleme CSV'sinde <code>grup:değer</code> biçiminde kullanılır (ör. <code>color:green</code>).</p>
+
+@if (_error is not null) { <div class="alert alert-danger">@_error</div> }
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label">Grup</label>
+                <select class="form-select" @bind="_group" disabled="@(_editId is not null)">
+                    @foreach (var g in Enum.GetValues<TagGroup>()) { <option value="@g">@GroupLabel(g)</option> }
+                </select>
+            </div>
+            <div class="col-md-2"><label class="form-label">Değer</label><input class="form-control" @bind="_value" disabled="@(_editId is not null)" placeholder="green" /></div>
+            <div class="col-md-3"><label class="form-label">Etiket</label><input class="form-control" @bind="_label" placeholder="Yeşil" /></div>
+            @if (_group == TagGroup.Color)
+            {
+                <div class="col-md-2"><label class="form-label">Renk</label><input type="color" class="form-control form-control-color w-100" @bind="_hex" /></div>
+            }
+            <div class="col-md-3 d-flex gap-2">
+                <button class="btn btn-success" @onclick="SaveAsync">@(_editId is null ? "Ekle" : "Güncelle")</button>
+                @if (_editId is not null) { <button class="btn btn-light" @onclick="Reset">Vazgeç</button> }
+            </div>
+        </div>
+    </div>
+</div>
+
+@foreach (var group in _tags.GroupBy(t => t.Group).OrderBy(g => g.Key))
+{
+    <div class="card mb-3">
+        <div class="card-header"><h5 class="card-title mb-0">@GroupLabel(group.Key) <span class="text-muted fs-13">(@group.Count())</span></h5></div>
+        <div class="card-body">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Anahtar</th><th>Etiket</th><th>Ürün sayısı</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in group.OrderBy(t => t.Label))
+                    {
+                        <tr>
+                            <td><code>@($"{t.Group.ToString().ToLowerInvariant()}:{t.Value}")</code></td>
+                            <td>
+                                @if (t.Hex is not null) { <span class="d-inline-block rounded-circle border me-1 align-middle" style="width:14px;height:14px;background:@t.Hex"></span> }
+                                @t.Label
+                            </td>
+                            <td>@t.ProductCount</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(t)">Düzenle</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(t)">Sil</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<TagAdminDto> _tags = [];
+    private Guid? _editId;
+    private TagGroup _group = TagGroup.Style;
+    private string _value = "", _label = "";
+    private string? _hex = "#888888";
+    private string? _error;
+
+    public static string GroupLabel(TagGroup g) => g switch
+    {
+        TagGroup.Color => "Renk",
+        TagGroup.Room => "Oda",
+        TagGroup.Style => "Stil",
+        TagGroup.Theme => "Tema",
+        TagGroup.Nature => "Doğa",
+        TagGroup.Tone => "Ton",
+        TagGroup.Density => "Yoğunluk",
+        _ => g.ToString()
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _tags = await Sender.Send(new GetTagsAdminQuery());
+
+    private void Edit(TagAdminDto t)
+    {
+        _editId = t.Id; _group = t.Group; _value = t.Value; _label = t.Label; _hex = t.Hex ?? "#888888"; _error = null;
+    }
+
+    private void Reset()
+    {
+        _editId = null; _value = ""; _label = ""; _hex = "#888888";
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        try
+        {
+            await Sender.Send(new SaveTagCommand(_editId, _group, _value, _label, _group == TagGroup.Color ? _hex : null));
+            Reset();
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = AdminErrors.Message(ex); }
+    }
+
+    private async Task DeleteAsync(TagAdminDto t)
+    {
+        _error = null;
+        try
+        {
+            await Sender.Send(new DeleteTagCommand(t.Id));
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = AdminErrors.Message(ex); }
+    }
+}

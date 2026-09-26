@@ -1,0 +1,11 @@
+@model WallCatalogResult
+@{
+    ViewData["Title"] = "Ürün bulunamadı";
+    ViewData["MetaRobots"] = "noindex";
+}
+<div class="py-4">
+    <h1 class="h3">Ürün bulunamadı</h1>
+    <p class="text-muted">@(ViewBag.Message as string ?? "Aradığınız poster artık satışta değil veya bağlantı hatalı. Belki şunlardan biri ilginizi çeker:")</p>
+    <partial name="~/Views/Wallpaper/_WallGrid.cshtml" model="Model" />
+    <a class="btn btn-primary mt-3" href="/duvar-kagitlari">Tüm posterlere göz at</a>
+</div>

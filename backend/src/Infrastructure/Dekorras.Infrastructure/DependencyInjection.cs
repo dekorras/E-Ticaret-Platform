@@ -69,6 +69,16 @@ public static class DependencyInjection
 
         services.AddSingleton<IFileStorage>(_ => new LocalFileStorage(LocalFileStorage.SharedUploadsRoot));
 
+        // Ölçüye özel duvar kağıdı: görsel depolama/türev/render (ImageSharp) + render önbelleği (HybridCache)
+        services.AddHybridCache();
+        services.AddSingleton<Application.WallCovering.IWallImageStore, WallCovering.WallImageStore>();
+        services.AddSingleton<Application.WallCovering.IImageDerivativeService, WallCovering.ImageDerivativeService>();
+        services.AddSingleton<Application.WallCovering.IWallPreviewRenderer, WallCovering.WallPreviewRenderer>();
+        services.AddSingleton<Application.WallCovering.IDefaultSceneGenerator, WallCovering.DefaultSceneGenerator>();
+        services.AddSingleton<Application.WallCovering.IWallRenderCache, WallCovering.WallRenderCache>();
+        services.AddSingleton<Application.WallCovering.IExternalImageFetcher, WallCovering.ExternalImageFetcher>();
+        services.AddSingleton<Application.WallCovering.IProductionFileRenderer, WallCovering.ProductionFileRenderer>();
+
         var redisConnectionString = configuration.GetConnectionString("Redis");
         if (!string.IsNullOrWhiteSpace(redisConnectionString))
         {

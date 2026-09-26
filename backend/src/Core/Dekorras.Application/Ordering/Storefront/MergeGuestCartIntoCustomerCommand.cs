@@ -56,7 +56,16 @@ public sealed class MergeGuestCartIntoCustomerCommandHandler(IUnitOfWork unitOfW
 
         foreach (var item in customerCart.Items)
         {
-            var alreadyInSession = sessionCart.Items.Any(i => i.ProductId == item.ProductId && i.VariantId == item.VariantId);
+            // Ölçüye özel satırlar konfigürasyon özetiyle (ConfigHash) eşleşir - düz satır olarak
+            // kopyalansaydı ölçü/malzeme bilgisi kaybolurdu.
+            if (item.IsConfigured)
+            {
+                if (!sessionCart.Items.Any(i => i.ProductId == item.ProductId && i.ConfigHash == item.ConfigHash))
+                    sessionCart.AddConfiguredItem(item.ProductId, item.ConfigurationJson!, item.ConfigHash!, item.PriceSnapshotJson ?? "{}", item.Quantity, item.UnitPriceTry);
+                continue;
+            }
+
+            var alreadyInSession = sessionCart.Items.Any(i => i.ProductId == item.ProductId && i.VariantId == item.VariantId && !i.IsConfigured);
             if (!alreadyInSession)
                 sessionCart.AddOrUpdateItem(item.ProductId, item.VariantId, item.Quantity, item.UnitPriceTry);
         }

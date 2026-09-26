@@ -24,6 +24,8 @@ public class CategoryController(ISender sender) : Controller
         var activeBrands = allBrands.Where(b => b.IsActive).ToList();
 
         ViewBag.Category = category;
+        // Duvar kağıdı/poster kategorisi: görsel katalog + "Duvarımda Dene" tanıtım şeridi gösterilir.
+        ViewBag.HasWallProducts = result.Items.Count > 0 && (await sender.Send(new Dekorras.Application.WallCovering.GetWallCardInfoQuery(result.Items.Select(p => p.Id).ToList()))).Count > 0;
         var model = new ProductListingViewModel(
             result.Items, activeBrands, SearchText: null, minPrice, maxPrice, brandId,
             sort, page, ProductListingHelper.NormalizePageSize(pageSize), result.TotalCount, result.TotalPages);

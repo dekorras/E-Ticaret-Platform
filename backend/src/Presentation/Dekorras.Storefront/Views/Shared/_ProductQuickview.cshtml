@@ -33,7 +33,16 @@
         <h4 class="dk-heading">@Model.Name</h4>
         <p class="text-muted small mb-2">Ürün Kodu: @Model.ProductCode</p>
 
-        @if (Model.PricesVisible)
+        @if (ViewBag.WallFromPrice is decimal wallFromPrice)
+        {
+            <p class="fs-4 fw-bold mb-1">@Html.Money(wallFromPrice) <small class="text-muted fs-6">/ m² başlayan fiyatlarla (KDV hariç)</small></p>
+            <p class="small text-muted">Duvarınızın ölçüsüne göre üretilir. Ölçünüzü girin, fiyatı anında görün ve odanızda nasıl duracağını deneyin.</p>
+            <div class="d-flex gap-2 flex-wrap mt-2">
+                <a class="btn btn-primary" asp-controller="Product" asp-action="Details" asp-route-slug="@Model.Slug">Ölçünü Seç</a>
+                <wall-preview-link product="@Model.Slug" variant="button" source="kart" />
+            </div>
+        }
+        else if (Model.PricesVisible)
         {
             <p class="fs-4 fw-bold mb-1">@Html.Money(Model.PriceTry) <small class="text-muted fs-6">/ @unitLabel</small></p>
         }
@@ -42,9 +51,16 @@
             <p class="fs-5 fw-bold text-muted">Fiyat için bizimle iletişime geçin</p>
         }
 
-        <span class="badge @stockBadgeClass mb-2">@stockLabel</span>
+        @if (ViewBag.WallFromPrice is null)
+        {
+            <span class="badge @stockBadgeClass mb-2">@stockLabel</span>
+        }
 
-        @if (canOrder && Model.PricesVisible)
+        @if (ViewBag.WallFromPrice is not null)
+        {
+            @* Ölçüye özel ürün: sipariş yalnızca konfigüratörden (yukarıdaki "Ölçünü Seç"). *@
+        }
+        else if (canOrder && Model.PricesVisible)
         {
             <form asp-controller="Cart" asp-action="Add" method="post" class="mt-2">
                 <input type="hidden" name="productId" value="@Model.Id" />

@@ -1,0 +1,126 @@
+@page "/admin/wall/bulk-upload"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.WallCovering
+@using Microsoft.AspNetCore.Components.Forms
+@inject MediatR.ISender Sender
+
+<PageTitle>Toplu Poster Yükleme</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Toplu Poster Yükleme</h4>
+</div>
+
+<div class="card" style="max-width: 900px;">
+    <div class="card-body">
+        <p class="text-muted mb-2">
+            Görselleri (JPEG/PNG/WebP) tek tek ya da bir ZIP içinde seçin. İsteğe bağlı bir CSV ile başlık, slug, etiket ve desen bilgisi verilebilir;
+            CSV yoksa başlık dosya adından üretilir. Her satır bağımsız işlenir, hatalı satırlar raporda gösterilir.
+        </p>
+        <details class="mb-3">
+            <summary>CSV biçimi</summary>
+            <pre class="bg-light p-2 rounded small mb-0">dosya;baslik;slug;etiketler;tur;tekrar_en;tekrar_boy;tekrar_tipi
+orman-sisli.jpg;Sisli Orman;sisli-orman;color:green|room:living|style:nature;mural;;;
+cicek-desen.png;Çiçek Deseni;;color:pink|style:floral;pattern;53;53;halfdrop</pre>
+            <div class="form-text">Ayırıcı noktalı virgül ya da virgül olabilir. Etiket anahtarları <a href="/admin/wall/tags">Etiketler</a> sayfasındaki <code>grup:değer</code> biçimindedir.</div>
+        </details>
+
+        <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label">Dosyalar (görseller, ZIP, CSV)</label>
+                <InputFile OnChange="OnFilesSelected" multiple accept=".jpg,.jpeg,.png,.webp,.zip,.csv" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Kategori</label>
+                <select class="form-select" @bind="_categorySlug">
+                    <option value="posterler-141">Posterler</option>
+                    <option value="duvar-kagitlari-129">Duvar Kağıtları</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="publish" @bind="_publish" />
+                    <label class="form-check-label" for="publish">Hemen yayınla</label>
+                </div>
+            </div>
+        </div>
+
+        @if (_files.Count > 0)
+        {
+            <div class="small text-muted mt-2">@_files.Count dosya seçildi (@(_files.Sum(f => f.Size) / 1024d / 1024d).ToString("0.0") MB): @string.Join(", ", _files.Take(8).Select(f => f.Name))@(_files.Count > 8 ? " …" : "")</div>
+        }
+
+        @if (_error is not null) { <div class="alert alert-danger mt-3 mb-0">@_error</div> }
+
+        <button class="btn btn-primary mt-3" disabled="@(_busy || _files.Count == 0)" @onclick="ImportAsync">
+            @if (_busy) { <span class="spinner-border spinner-border-sm me-1"></span> <span>İşleniyor…</span> } else { <span>Yükle ve işle</span> }
+        </button>
+    </div>
+</div>
+
+@if (_results is not null)
+{
+    var ok = _results.Count(r => r.Success);
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Rapor: @ok eklendi, @(_results.Count - ok) hatalı, @_results.Count(r => r.LowResolution) düşük çözünürlük</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Satır</th><th>Dosya</th><th>Durum</th><th>Boyut</th><th>Ürün</th><th>Açıklama</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _results)
+                        {
+                            <tr class="@(r.Success ? (r.LowResolution ? "table-warning" : "") : "table-danger")">
+                                <td>@r.Line</td>
+                                <td><code>@r.File</code></td>
+                                <td>@(r.Success ? "Eklendi" : "Hata")</td>
+                                <td>@(r.WidthPx > 0 ? $"{r.WidthPx}×{r.HeightPx}" : "")</td>
+                                <td>@if (r.ProductId is { } id) { <a href="/admin/ecommerce/products/@id" target="_blank">@r.Slug</a> }</td>
+                                <td>@r.Message</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="form-text mb-0 mt-2">Görsel türevleri ve sahne küçük resimleri arka planda üretilir; ürünler birkaç dakika içinde katalogda görsel olarak tamamlanır.</p>
+        </div>
+    </div>
+}
+
+@code {
+    private const long MaxFileBytes = 300L * 1024 * 1024;
+    private IReadOnlyList<IBrowserFile> _files = [];
+    private IReadOnlyList<BulkImportResultRow>? _results;
+    private string _categorySlug = "posterler-141";
+    private bool _publish = true, _busy;
+    private string? _error;
+
+    private void OnFilesSelected(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _results = null;
+        _files = e.GetMultipleFiles(500);
+    }
+
+    private async Task ImportAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var uploads = new List<BulkUploadFile>();
+            foreach (var f in _files)
+            {
+                using var buffer = new MemoryStream();
+                await using (var s = f.OpenReadStream(MaxFileBytes)) await s.CopyToAsync(buffer);
+                uploads.Add(new BulkUploadFile(f.Name, buffer.ToArray()));
+            }
+            _results = await Sender.Send(new BulkPosterImportCommand(uploads, _categorySlug, _publish));
+            _files = [];
+        }
+        catch (Exception ex) { _error = AdminErrors.Message(ex); }
+        finally { _busy = false; }
+    }
+}

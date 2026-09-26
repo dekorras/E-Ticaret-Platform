@@ -12,4 +12,5 @@ public sealed record ProductDetailViewModel(
     string? ReviewError,
     string? QuestionError,
     bool IsInWishlist = false,
-    IReadOnlyCollection<StorefrontProductListItemDto>? RelatedProducts = null);
+    IReadOnlyCollection<StorefrontProductListItemDto>? RelatedProducts = null,
+    WallConfiguratorModel? Wall = null);

@@ -1,0 +1,56 @@
+@model WallCompareModel
+@{
+    ViewData["Title"] = "Posterleri karşılaştır";
+    ViewData["MetaRobots"] = "noindex, follow";
+}
+<div class="py-3" data-wall-compare>
+    <script type="application/json" id="wallCompareData">@Html.Raw(Model.ToClientJson())</script>
+    <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+        <div>
+            <h1 class="h4 mb-1">Posterleri karşılaştır</h1>
+            <p class="text-muted small mb-0">Aynı oda ve aynı duvar ölçüsünde yan yana.</p>
+        </div>
+        <form method="get" class="d-flex flex-wrap gap-2 align-items-end ms-auto" data-compare-form>
+            <input type="hidden" name="products" value="@string.Join(",", Model.Products.Select(p => p.Slug))" />
+            <div>
+                <label class="form-label small mb-0" for="cmpScene">Oda</label>
+                <select id="cmpScene" name="scene" class="form-select form-select-sm" data-compare-scene>
+                    @foreach (var s in Model.Scenes)
+                    {
+                        <option value="@s.Id" selected="@(s.Id == Model.Scene.Id)">@s.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="form-label small mb-0" for="cmpW">En (cm)</label>
+                <input id="cmpW" name="w_cm" class="form-control form-control-sm" style="width:6rem" inputmode="decimal" value="@Model.Configuration.WidthCm.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)" data-compare-w />
+            </div>
+            <div>
+                <label class="form-label small mb-0" for="cmpH">Boy (cm)</label>
+                <input id="cmpH" name="h_cm" class="form-control form-control-sm" style="width:6rem" inputmode="decimal" value="@Model.Configuration.HeightCm.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)" data-compare-h />
+            </div>
+            <button type="submit" class="btn btn-sm btn-secondary">Uygula</button>
+        </form>
+    </div>
+    <div class="row row-cols-1 row-cols-md-2 g-3">
+        @foreach (var p in Model.Products)
+        {
+            <div class="col">
+                <figure class="wall-compare-item" data-compare-item="@p.Slug">
+                    <canvas data-compare-canvas role="img" aria-label="@p.Title odada"></canvas>
+                    <noscript><img class="img-fluid" alt="@p.Title odada" src="/api/v1/scenes/@Model.Scene.Id/render?product=@p.Slug&w_cm=@Model.Configuration.WidthCm.ToString(System.Globalization.CultureInfo.InvariantCulture)&h_cm=@Model.Configuration.HeightCm.ToString(System.Globalization.CultureInfo.InvariantCulture)&size=800" /></noscript>
+                    <figcaption class="d-flex justify-content-between align-items-center mt-2">
+                        <span>@p.Title</span>
+                        <span class="d-flex gap-1">
+                            <a class="btn btn-sm btn-outline-secondary" href="/Product/Details?slug=@Uri.EscapeDataString(p.Slug)">Ürün</a>
+                            <wall-preview-link product="@p.Slug" variant="button" source="goruntuleyici" css-class="btn-sm" />
+                        </span>
+                    </figcaption>
+                </figure>
+            </div>
+        }
+    </div>
+</div>
+@section Scripts {
+    <script src="~/js/wall/wall-visualizer.js" asp-append-version="true"></script>
+}

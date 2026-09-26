@@ -22,7 +22,8 @@ public class Cart : AuditableEntity
 
     public void AddOrUpdateItem(Guid productId, Guid? variantId, int quantity, decimal unitPriceTry)
     {
-        var existing = _items.FirstOrDefault(i => i.ProductId == productId && i.VariantId == variantId);
+        // Konfigüre (ölçüye özel) satırlar ConfigHash ile ayrı eşleşir - düz ürün satırıyla asla birleşmez.
+        var existing = _items.FirstOrDefault(i => i.ProductId == productId && i.VariantId == variantId && i.ConfigHash == null);
         if (existing is not null)
         {
             existing.SetQuantity(quantity);
@@ -35,7 +36,28 @@ public class Cart : AuditableEntity
         _items.Add(new CartItem(Id, productId, variantId, quantity, unitPriceTry));
     }
 
-    public void RemoveItem(Guid productId, Guid? variantId) => _items.RemoveAll(i => i.ProductId == productId && i.VariantId == variantId);
+    /// <summary>Ölçüye özel duvar kağıdı satırı. Aynı ürün + aynı konfigürasyon (ConfigHash) varsa
+    /// adet ARTIRILIR, farklı ölçü/malzeme ayrı satır olur. Fiyat daima çağıran tarafça SUNUCUDA
+    /// hesaplanmış olmalıdır (istemciden gelen fiyat asla kullanılmaz).</summary>
+    public CartItem AddConfiguredItem(Guid productId, string configurationJson, string configHash, string priceSnapshotJson, int quantity, decimal unitPriceTry)
+    {
+        var existing = _items.FirstOrDefault(i => i.ProductId == productId && i.ConfigHash == configHash);
+        if (existing is not null)
+        {
+            existing.SetQuantity(existing.Quantity + quantity);
+            existing.SetUnitPrice(unitPriceTry);
+            existing.SetPriceSnapshot(priceSnapshotJson);
+            return existing;
+        }
+
+        var item = new CartItem(Id, productId, null, quantity, unitPriceTry);
+        item.SetConfiguration(configurationJson, configHash, priceSnapshotJson);
+        _items.Add(item);
+        return item;
+    }
+
+    public void RemoveItem(Guid productId, Guid? variantId) => _items.RemoveAll(i => i.ProductId == productId && i.VariantId == variantId && i.ConfigHash == null);
+    public void RemoveItemById(Guid cartItemId) => _items.RemoveAll(i => i.Id == cartItemId);
     public void SetCustomerId(Guid customerId) => CustomerId = customerId;
 
     /// <summary>Giriş yapan bir müşterinin başka bir cihazda kayıtlı sepetini, o cihazın tarayıcı
@@ -74,6 +96,24 @@ public class CartItem : BaseEntity
         UnitPriceTry = unitPriceTry;
     }
 
+    /// <summary>Ölçüye özel satırda WallConfiguration JSON'u; düz ürünlerde null.</summary>
+    public string? ConfigurationJson { get; private set; }
+    public string? ConfigHash { get; private set; }
+
+    /// <summary>Sepete eklendiği andaki fiyat kırılımı (WallpaperLinePrice JSON) - yalnızca gösterim;
+    /// checkout fiyatı yeniden hesaplar.</summary>
+    public string? PriceSnapshotJson { get; private set; }
+
+    public bool IsConfigured => ConfigHash is not null;
+
     public void SetQuantity(int quantity) => Quantity = quantity;
     public void SetUnitPrice(decimal unitPriceTry) => UnitPriceTry = unitPriceTry;
+    public void SetPriceSnapshot(string priceSnapshotJson) => PriceSnapshotJson = priceSnapshotJson;
+
+    public void SetConfiguration(string configurationJson, string configHash, string priceSnapshotJson)
+    {
+        ConfigurationJson = configurationJson;
+        ConfigHash = configHash;
+        PriceSnapshotJson = priceSnapshotJson;
+    }
 }

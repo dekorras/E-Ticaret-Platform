@@ -1,0 +1,291 @@
+/* Ölçüye özel duvar kağıdı modülü: katalog kartları, "Duvarımda Dene" tepsisi, konfigüratör ve
+   duvar görüntüleyici. Marka token'ları variables.css'ten gelir. */
+
+/* ---------- Katalog kartı ---------- */
+.wall-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--dk-color-bg);
+    border: 1px solid var(--dk-color-border);
+    border-radius: var(--dk-radius);
+    overflow: hidden;
+    transition: box-shadow var(--dk-transition);
+}
+.wall-card:hover, .wall-card:focus-within { box-shadow: var(--dk-shadow-md); }
+
+.wall-card-media {
+    position: relative;
+    display: block;
+    aspect-ratio: var(--wall-ratio, 1.3333);
+    max-height: 420px;
+    background-color: var(--dk-color-bg-alt);
+    background-size: cover;
+    background-position: center;
+    overflow: hidden;
+}
+.wall-card-img, .wall-card-scene {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity var(--dk-transition), transform 0.6s ease;
+}
+.wall-card-scene { opacity: 0; }
+.wall-card:hover .wall-card-scene,
+.wall-card-media:focus-visible .wall-card-scene,
+.wall-card-media.is-scene .wall-card-scene { opacity: 1; }
+.wall-card:hover .wall-card-img { transform: scale(1.03); }
+.wall-card-noimg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dk-color-muted); }
+
+.wall-card-fav {
+    position: absolute;
+    top: .5rem;
+    right: .5rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .92);
+    color: var(--dk-color-text);
+    display: grid;
+    place-items: center;
+    box-shadow: var(--dk-shadow-sm);
+}
+.wall-card-fav[aria-pressed="true"] { color: #d63384; }
+.wall-card-fav:focus-visible { outline: 2px solid var(--dk-color-primary); outline-offset: 2px; }
+
+.wall-card-body { padding: .75rem; display: flex; flex-direction: column; gap: .35rem; flex: 1; }
+.wall-card-title { font-size: .95rem; margin: 0; line-height: 1.3; }
+.wall-card-title a { color: inherit; text-decoration: none; }
+.wall-card-title a:hover { color: var(--dk-color-primary); }
+.wall-card-price { margin: 0; font-weight: 700; font-size: .9rem; }
+.wall-card-colors { display: flex; gap: .25rem; }
+.wall-card-actions { margin-top: auto; display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
+.wall-card-actions .btn { font-size: .78rem; }
+
+.wall-color-dot {
+    display: inline-block;
+    width: .9rem;
+    height: .9rem;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, .15);
+    vertical-align: middle;
+}
+.wall-filter-legend { font-size: .9rem; font-weight: 700; margin-bottom: .35rem; }
+.wall-color-tags .form-check-inline { margin-right: .5rem; }
+
+.btn-wall-preview-text { color: var(--dk-color-primary); text-decoration: underline; }
+
+/* ---------- Duvarımda Dene tepsisi ---------- */
+body.has-wall-tray { padding-bottom: 8.5rem; }
+.wall-tray {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: min(100%, 1100px);
+    z-index: 1040;
+    background: #fff;
+    border: 1px solid var(--dk-color-border);
+    border-bottom: 0;
+    border-radius: 10px 10px 0 0;
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, .12);
+    padding: .5rem .75rem .75rem;
+}
+.wall-tray-head { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; justify-content: space-between; }
+.wall-tray-toggle { border: 0; background: none; font-weight: 700; display: flex; gap: .4rem; align-items: center; padding: .25rem 0; }
+.wall-tray-tools { display: flex; gap: .35rem; flex-wrap: wrap; }
+.wall-tray-items { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; gap: .5rem; overflow-x: auto; }
+.wall-tray.is-collapsed .wall-tray-items { display: none; }
+.wall-tray-item { position: relative; flex: 0 0 72px; height: 72px; border-radius: 6px; overflow: hidden; border: 1px solid var(--dk-color-border); cursor: grab; background: var(--dk-color-bg-alt); }
+.wall-tray-item.is-dragging { opacity: .4; }
+.wall-tray-item a { display: block; width: 100%; height: 100%; }
+.wall-tray-item img { width: 100%; height: 100%; object-fit: cover; }
+.wall-tray-remove {
+    position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; line-height: 18px; padding: 0;
+    border: 0; border-radius: 50%; background: rgba(0, 0, 0, .65); color: #fff; font-size: 14px;
+}
+.wall-tray-compare { position: absolute; left: 3px; bottom: 1px; background: rgba(255, 255, 255, .85); border-radius: 3px; padding: 0 2px; }
+
+.wall-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.25rem;
+    transform: translate(-50%, 150%);
+    z-index: 1090;
+    background: #222;
+    color: #fff;
+    padding: .6rem 1rem;
+    border-radius: 6px;
+    font-size: .9rem;
+    transition: transform .25s ease;
+    pointer-events: none;
+}
+body.has-wall-tray .wall-toast { bottom: 9.5rem; }
+.wall-toast.is-visible { transform: translate(-50%, 0); }
+.wall-toast.is-error { background: #b02a37; }
+
+@media (max-width: 576px) {
+    body.has-wall-tray { padding-bottom: 7.5rem; }
+    .wall-tray-tools .btn { font-size: .75rem; padding: .2rem .45rem; }
+    .wall-tray-item { flex-basis: 60px; height: 60px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wall-card-img, .wall-card-scene, .wall-toast { transition: none; }
+}
+
+/* ---------- Konfigüratör (ürün sayfası) ---------- */
+.wall-view-switch { display: flex; gap: .5rem; flex-wrap: wrap; }
+.wall-stage {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 240px;
+    background:
+        linear-gradient(45deg, #f1f1f1 25%, transparent 25%) 0 0 / 20px 20px,
+        linear-gradient(-45deg, #f1f1f1 25%, transparent 25%) 0 10px / 20px 20px,
+        #fafafa;
+    border: 1px solid var(--dk-color-border);
+    border-radius: var(--dk-radius);
+    padding: .75rem;
+    overflow: hidden;
+}
+.wall-canvas { display: block; max-width: 100%; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); background: #fff; }
+.wall-stage-fallback { max-width: 100%; max-height: 520px; object-fit: contain; }
+.wall-stage-fallback[hidden], .wall-canvas[hidden], .wall-crop-editor[hidden] { display: none; }
+.wall-crop-editor { width: 100%; max-height: 560px; }
+.wall-crop-editor img { display: block; max-width: 100%; }
+.wall-crop-editor .cropper-crop-box:focus-visible { outline: 3px solid var(--dk-color-primary); }
+
+.wall-form { position: sticky; top: calc(var(--dk-header-height-compact) + 1rem); }
+.wall-step { border-bottom: 1px solid var(--dk-color-border); padding: 0 0 1rem; margin-bottom: 1rem; }
+.wall-step-title { font-size: 1rem; font-weight: 700; display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+.wall-step-title span {
+    display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%;
+    background: var(--dk-color-primary); color: #fff; font-size: .85rem;
+}
+.wall-materials { display: grid; gap: .5rem; max-height: 360px; overflow-y: auto; padding-right: .25rem; }
+.wall-material {
+    display: flex; flex-direction: column; gap: .2rem; cursor: pointer;
+    border: 1px solid var(--dk-color-border); border-radius: 6px; padding: .6rem .75rem; background: #fff;
+    transition: border-color var(--dk-transition), box-shadow var(--dk-transition);
+}
+.wall-material-head { display: flex; justify-content: space-between; gap: .5rem; }
+.wall-material-price { font-weight: 700; white-space: nowrap; }
+.wall-material-specs, .wall-material-features { font-size: .8rem; color: var(--dk-color-muted); }
+.wall-material-badges { display: flex; gap: .25rem; flex-wrap: wrap; }
+.btn-check:checked + .wall-material { border-color: var(--dk-color-primary); box-shadow: 0 0 0 2px rgba(var(--dk-color-primary-rgb), .25); }
+.btn-check:focus-visible + .wall-material { outline: 2px solid var(--dk-color-primary); outline-offset: 2px; }
+
+.wall-summary { background: var(--dk-color-bg-alt); border-radius: 8px; padding: 1rem; }
+.wall-summary-list { display: grid; grid-template-columns: 1fr auto; gap: .2rem 1rem; margin-bottom: .75rem; }
+.wall-summary-list dt { font-weight: 400; color: var(--dk-color-muted); }
+.wall-summary-list dd { margin: 0; text-align: right; }
+.wall-summary-list [hidden] { display: none; }
+.wall-summary-total { font-weight: 700 !important; color: var(--dk-color-text) !important; font-size: 1.1rem; }
+
+@media (max-width: 991.98px) {
+    .wall-form { position: static; }
+}
+
+/* ---------- Duvar görüntüleyici ---------- */
+.wall-viz { --viz-gap: 1rem; }
+.wall-viz.is-framed { padding: .75rem; min-height: 100vh; background: #fff; }
+.wall-viz:fullscreen { background: #fff; padding: 1rem; overflow: auto; }
+.wall-viz-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+.wall-viz-actions { display: flex; gap: .35rem; flex-wrap: wrap; }
+.wall-viz-body { display: grid; grid-template-columns: 220px minmax(0, 1fr) 280px; gap: var(--viz-gap); align-items: start; }
+.wall-viz-list { border: 1px solid var(--dk-color-border); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; max-height: 78vh; }
+.wall-viz-list .nav { flex-wrap: nowrap; }
+.wall-viz-list .nav-link { padding: .4rem .2rem; font-size: .72rem; white-space: nowrap; }
+.wall-viz-search { padding: .5rem; border-bottom: 1px solid var(--dk-color-border); }
+.wall-viz-search[hidden] { display: none; }
+.wall-viz-items { list-style: none; margin: 0; padding: .35rem; overflow-y: auto; display: grid; gap: .35rem; }
+.wall-viz-item { display: flex; gap: .5rem; align-items: center; width: 100%; border: 1px solid transparent; border-radius: 6px; background: none; padding: .25rem; text-align: left; font-size: .8rem; }
+.wall-viz-item img { width: 48px; height: 48px; object-fit: cover; border-radius: 4px; flex: none; background: var(--dk-color-bg-alt); }
+.wall-viz-item:hover, .wall-viz-item:focus-visible { background: var(--dk-color-bg-alt); }
+.wall-viz-item.is-current { border-color: var(--dk-color-primary); background: rgba(var(--dk-color-primary-rgb), .06); }
+.wall-viz-list-hint { padding: .35rem .5rem; border-top: 1px solid var(--dk-color-border); }
+
+.wall-viz-stage { min-width: 0; }
+.wall-viz-viewport { position: relative; overflow: hidden; border-radius: 8px; background: #1f1f1f; display: flex; justify-content: center; align-items: center; min-height: 260px; touch-action: none; }
+.wall-viz-viewport:focus-visible { outline: 3px solid var(--dk-color-primary); outline-offset: 2px; }
+.wall-viz-viewport.is-zoomed { cursor: grab; }
+.wall-viz-zoom { transform-origin: center center; transition: transform .12s ease-out; }
+.wall-viz-zoom canvas { display: block; max-width: 100%; }
+.wall-viz-loading { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .25); }
+.wall-viz-loading[hidden] { display: none; }
+.wall-viz-zoom-tools { position: absolute; right: .5rem; bottom: .5rem; display: flex; gap: .25rem; }
+.wall-viz-scenes { display: flex; gap: .5rem; overflow-x: auto; padding: .75rem 0 .25rem; }
+.wall-viz-scene {
+    flex: 0 0 120px; border: 2px solid transparent; border-radius: 8px; padding: 0; background: none; text-align: left;
+    font-size: .75rem; color: inherit; text-decoration: none; overflow: hidden;
+}
+.wall-viz-scene img { display: block; width: 100%; height: 72px; object-fit: cover; border-radius: 6px; }
+.wall-viz-scene span { display: block; padding: .15rem .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wall-viz-scene.is-active { border-color: var(--dk-color-primary); }
+.wall-viz-scene-upload { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px dashed var(--dk-color-border); min-height: 96px; }
+.wall-viz-scene-upload i { font-size: 1.4rem; }
+.wall-viz-controls { border: 1px solid var(--dk-color-border); border-radius: 8px; padding: .75rem; }
+
+@media (max-width: 1199.98px) {
+    .wall-viz-body { grid-template-columns: minmax(0, 1fr) 260px; }
+    .wall-viz-list { grid-column: 1 / -1; order: 3; max-height: 240px; }
+}
+@media (max-width: 767.98px) {
+    .wall-viz-body { grid-template-columns: 1fr; }
+    .wall-viz-controls { order: 2; }
+}
+
+/* ---------- "Duvarında Gör" modalı ---------- */
+.wall-dialog { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; padding: 0; border: 0; background: #fff; }
+.wall-dialog::backdrop { background: rgba(0, 0, 0, .55); }
+.wall-dialog iframe { width: 100%; height: 100%; border: 0; display: block; }
+html.wall-dialog-open { overflow: hidden; }
+
+/* ---------- Karşılaştırma ---------- */
+.wall-compare-item canvas { display: block; width: 100%; border-radius: 8px; background: #1f1f1f; }
+
+/* ---------- Kendi odamı yükle ---------- */
+.room-editor { position: relative; display: inline-block; max-width: 100%; user-select: none; touch-action: none; }
+.room-editor img { display: block; max-width: 100%; max-height: 62vh; }
+.room-editor svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+.room-editor polygon { fill: rgba(233, 102, 49, .18); stroke: #e96631; stroke-width: 2; stroke-dasharray: 6 4; }
+.room-handle {
+    position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%;
+    border: 2px solid #fff; background: #e96631; color: #fff; font-size: 12px; font-weight: 700; line-height: 1;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, .45); cursor: grab; touch-action: none;
+}
+.room-handle:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
+.room-editor canvas { position: absolute; left: 0; top: 0; cursor: crosshair; }
+.room-mask-editor img { max-height: 50vh; }
+.room-mask-editor canvas { width: 100%; height: 100%; opacity: .55; }
+.room-mask-editor svg { width: 100%; height: 100%; }
+.room-mask-editor polyline { fill: rgba(233, 102, 49, .15); stroke: #e96631; stroke-dasharray: 8 5; }
+.room-mask-editor .room-poly-point { fill: #fff; stroke: #e96631; stroke-width: 2; }
+.room-mask-editor .room-poly-start { fill: #e96631; stroke: #fff; stroke-width: 3; }
+.wall-viz-body.no-list { grid-template-columns: minmax(0, 1fr) 280px; }
+@media (max-width: 767.98px) { .wall-viz-body.no-list { grid-template-columns: 1fr; } }
+
+/* Baskı alanı seçimi (görüntüleyici): görselin üstünde sipariş ölçüsü oranında sürüklenebilir çerçeve */
+.wall-crop-dialog { border: 0; border-radius: .5rem; padding: 0; width: min(920px, 96vw); max-height: 94vh; box-shadow: 0 10px 40px rgba(0, 0, 0, .35); }
+.wall-crop-dialog::backdrop { background: rgba(0, 0, 0, .55); }
+.wall-crop-inner { padding: 1rem; }
+.wall-crop-stage { position: relative; width: 100%; margin: 0 auto; overflow: hidden; background: #222; user-select: none; touch-action: none; }
+.wall-crop-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+.wall-crop-frame { position: absolute; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .55); outline: 2px solid #fff; cursor: move; touch-action: none; }
+.wall-crop-frame:focus-visible { outline: 3px solid #e96631; }
+.wall-crop-grid { position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(to right, transparent 33.2%, rgba(255,255,255,.45) 33.3%, transparent 33.4%, transparent 66.5%, rgba(255,255,255,.45) 66.6%, transparent 66.7%),
+                linear-gradient(to bottom, transparent 33.2%, rgba(255,255,255,.45) 33.3%, transparent 33.4%, transparent 66.5%, rgba(255,255,255,.45) 66.6%, transparent 66.7%); }
+.wall-crop-label { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, .6); color: #fff; font-size: .8rem; padding: .1rem .45rem; border-radius: .25rem; pointer-events: none; white-space: nowrap; }
+.wall-crop-handle { position: absolute; width: 18px; height: 18px; background: #fff; border: 2px solid #e96631; border-radius: 50%; }
+.wall-crop-handle[data-crop-handle="nw"] { left: -9px; top: -9px; cursor: nwse-resize; }
+.wall-crop-handle[data-crop-handle="ne"] { right: -9px; top: -9px; cursor: nesw-resize; }
+.wall-crop-handle[data-crop-handle="se"] { right: -9px; bottom: -9px; cursor: nwse-resize; }
+.wall-crop-handle[data-crop-handle="sw"] { left: -9px; bottom: -9px; cursor: nesw-resize; }

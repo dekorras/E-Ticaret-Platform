@@ -45,6 +45,10 @@
             <label class="form-label">Kullanım Limiti (boş = sınırsız)</label>
             <input type="number" class="form-control" @bind="_usageLimitText" />
         </div>
+        <div class="mb-2">
+            <label class="form-label">Kişi Başı Limit (aynı e-postayla en fazla kaç sipariş; boş = sınırsız)</label>
+            <input type="number" min="1" class="form-control" @bind="_perUserLimitText" />
+        </div>
 
         @if (_errorMessage is not null)
         {
@@ -63,6 +67,7 @@
     private DateTime _validFrom = DateTime.Today;
     private DateTime _validTo = DateTime.Today.AddMonths(1);
     private string _usageLimitText = "";
+    private string _perUserLimitText = "";
     private string? _errorMessage;
 
     private async Task CreateAsync()
@@ -77,7 +82,8 @@
                 _discountValue,
                 DateTime.SpecifyKind(_validFrom, DateTimeKind.Utc),
                 DateTime.SpecifyKind(_validTo, DateTimeKind.Utc),
-                usageLimit));
+                usageLimit,
+                int.TryParse(_perUserLimitText, out var perUser) ? perUser : null));
 
             NavigationManager.NavigateTo("/admin/ecommerce/coupons");
         }

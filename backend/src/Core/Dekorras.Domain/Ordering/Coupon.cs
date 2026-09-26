@@ -17,6 +17,16 @@ public class Coupon : AuditableEntity
     public bool AllowGuestUsage { get; private set; } = true;
     public bool IsActive { get; private set; } = true;
 
+    /// <summary>Aynı müşterinin bu kuponu en fazla kaç siparişte kullanabileceği (null = sınırsız).
+    /// Kontrol checkout'ta müşterinin önceki siparişlerindeki CouponCode sayılarak yapılır.</summary>
+    public int? PerUserLimit { get; private set; }
+
+    public void SetPerUserLimit(int? perUserLimit)
+    {
+        if (perUserLimit is < 1) throw new DomainException("Kişi başı kullanım limiti en az 1 olmalıdır.");
+        PerUserLimit = perUserLimit;
+    }
+
     private Coupon() { }
 
     public Coupon(string code, DiscountType discountType, decimal discountValue, DateTime validFromUtc, DateTime validToUtc, int? usageLimit = null)

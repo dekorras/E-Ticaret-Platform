@@ -1,0 +1,39 @@
+@model TryOnListDto
+@{
+    ViewData["Title"] = "Paylaşılan \"Duvarımda Dene\" listesi";
+}
+@section Styles {
+    <meta name="robots" content="noindex" />
+}
+
+<h1 class="h3 mb-1">Paylaşılan "Duvarımda Dene" listesi</h1>
+<p class="text-muted">Size gönderilen @Model.Items.Count tasarım. Beğendiklerinizi kendi listenize ekleyip duvarınızda deneyebilirsiniz.</p>
+
+@if (Model.Items.Count == 0)
+{
+    <p class="text-muted">Bu listede artık gösterilecek tasarım yok.</p>
+}
+else
+{
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        @if (Model.Items.Count >= 2)
+        {
+            <a class="btn btn-primary" href="/duvarinda-gor/karsilastir?products=@string.Join(",", Model.Items.Take(4).Select(i => i.Card.Slug))">
+                <i class="bi bi-layout-split"></i> İlk @Math.Min(4, Model.Items.Count) tasarımı karşılaştır
+            </a>
+        }
+        <button type="button" class="btn btn-outline-secondary" data-tryon-add-all>
+            <i class="bi bi-plus-square"></i> Tümünü listeme ekle
+        </button>
+    </div>
+    <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3" data-wall-grid>
+        @foreach (var item in Model.Items)
+        {
+            <partial name="~/Views/Wallpaper/_WallCard.cshtml" model="item.Card" />
+        }
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/wall/wall-catalog.js" asp-append-version="true"></script>
+}

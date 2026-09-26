@@ -15,6 +15,7 @@ using Dekorras.Domain.Ordering;
 using Dekorras.Domain.Payments;
 using Dekorras.Domain.Shipping;
 using Dekorras.Domain.SystemAdmin;
+using Dekorras.Domain.WallCovering;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -110,6 +111,22 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
     // Notifications
     public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
+
+    // WallCovering (ölçüye özel duvar kağıdı konfigüratörü)
+    public DbSet<Material> Materials => Set<Material>();
+    public DbSet<ProductMaterialOverride> ProductMaterialOverrides => Set<ProductMaterialOverride>();
+    public DbSet<WallpaperProfile> WallpaperProfiles => Set<WallpaperProfile>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<ProductTag> ProductTags => Set<ProductTag>();
+    public DbSet<RoomScene> RoomScenes => Set<RoomScene>();
+    public DbSet<RoomPreviewRender> RoomPreviewRenders => Set<RoomPreviewRender>();
+    public DbSet<TryOnList> TryOnLists => Set<TryOnList>();
+    public DbSet<DesignRequest> DesignRequests => Set<DesignRequest>();
+    public DbSet<ProductionProof> ProductionProofs => Set<ProductionProof>();
+    public DbSet<ProductionFile> ProductionFiles => Set<ProductionFile>();
+    public DbSet<EmbedClient> EmbedClients => Set<EmbedClient>();
+    public DbSet<ExternalImage> ExternalImages => Set<ExternalImage>();
+    public DbSet<WallPreviewEvent> WallPreviewEvents => Set<WallPreviewEvent>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

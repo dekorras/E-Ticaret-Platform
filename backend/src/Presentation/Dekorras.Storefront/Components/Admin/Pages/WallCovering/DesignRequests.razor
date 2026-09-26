@@ -1,0 +1,176 @@
+@page "/admin/wall/design-requests"
+@page "/admin/wall/design-requests/{Id:guid}"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.WallCovering
+@using Dekorras.Domain.WallCovering
+@inject MediatR.ISender Sender
+@inject NavigationManager Navigation
+
+<PageTitle>Tasarım Talepleri</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">Tasarım Değişikliği Talepleri</h4>
+    <div class="d-flex gap-2 align-items-center">
+        <select class="form-select" @bind="_statusFilter" @bind:after="LoadAsync">
+            <option value="">Tüm durumlar</option>
+            @foreach (var s in Enum.GetValues<DesignRequestStatus>()) { <option value="@s">@StatusLabel(s)</option> }
+        </select>
+        <div class="form-check text-nowrap">
+            <input class="form-check-input" type="checkbox" id="overdue" @bind="_onlyOverdue" @bind:after="LoadAsync" />
+            <label class="form-check-label" for="overdue">Yalnız gecikenler</label>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="@(_detail is null ? "col-12" : "col-lg-6")">
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Tarih</th><th>Müşteri</th><th>Ürün</th><th>Tür</th><th>Durum</th><th>Son tarih</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _items)
+                        {
+                            <tr role="button" class="@(r.Id == Id ? "table-active" : "")" @onclick="@(() => Navigation.NavigateTo($"/admin/wall/design-requests/{r.Id}"))">
+                                <td>@r.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>@r.FullName<div class="small text-muted">@r.Email</div></td>
+                                <td>@(r.ProductName ?? "—") @if (r.AttachmentCount > 0) { <span class="badge bg-light text-body ms-1">📎 @r.AttachmentCount</span> }</td>
+                                <td>@TypeLabel(r.RequestType)</td>
+                                <td><span class="badge @StatusBadge(r.Status)">@StatusLabel(r.Status)</span></td>
+                                <td class="@(r.IsOverdue ? "text-danger fw-semibold" : "")">@r.DueAtUtc.ToLocalTime().ToString("dd.MM HH:mm")@(r.IsOverdue ? " (gecikti)" : "")</td>
+                            </tr>
+                        }
+                        @if (_items.Count == 0) { <tr><td colspan="6" class="text-muted">Talep yok.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    @if (_detail is not null)
+    {
+        var config = WallConfiguration.FromJson(_detail.ConfigurationJson);
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">@_detail.FullName · @TypeLabel(_detail.RequestType)</h5>
+                    <a class="btn-close" href="/admin/wall/design-requests" aria-label="Kapat"></a>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-3">
+                        <dt class="col-4">E-posta</dt><dd class="col-8"><a href="mailto:@_detail.Email">@_detail.Email</a></dd>
+                        <dt class="col-4">Ürün</dt>
+                        <dd class="col-8">
+                            @if (_detail.ProductSlug is not null)
+                            {
+                                <a href="/Product/Details?slug=@_detail.ProductSlug" target="_blank">@_detail.ProductName</a>
+                                <a class="ms-2 small" href="/admin/ecommerce/products/@_detail.ProductId">(admin)</a>
+                            }
+                            else { <span>—</span> }
+                        </dd>
+                        @if (config is not null)
+                        {
+                            <dt class="col-4">Konfigürasyon</dt>
+                            <dd class="col-8">@config.WidthCm.ToString("0.#") × @config.HeightCm.ToString("0.#") cm, @config.MaterialCode, @config.Fit@(config.Mirror ? ", aynalı" : "")</dd>
+                        }
+                        <dt class="col-4">Gönderim</dt><dd class="col-8">@_detail.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</dd>
+                        <dt class="col-4">Son yanıt tarihi</dt><dd class="col-8 @(_detail.IsOverdue ? "text-danger" : "")">@_detail.DueAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</dd>
+                    </dl>
+                    <div class="bg-light rounded p-3 mb-3" style="white-space:pre-wrap">@_detail.Message</div>
+
+                    @if (_detail.Attachments.Count > 0)
+                    {
+                        <h6>Ekler</h6>
+                        <ul class="list-unstyled mb-3">
+                            @foreach (var a in _detail.Attachments)
+                            {
+                                <li><a href="/admin/wall/design-request-attachments/@a.Id" target="_blank">@a.FileName</a> <span class="text-muted small">(@((a.SizeBytes / 1024d).ToString("0")) KB)</span></li>
+                            }
+                        </ul>
+                    }
+
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <label class="form-label">Durum</label>
+                            <select class="form-select" @bind="_status">
+                                @foreach (var s in Enum.GetValues<DesignRequestStatus>()) { <option value="@s">@StatusLabel(s)</option> }
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Yönetici notu (müşteriye gönderilmez)</label>
+                            <textarea class="form-control" rows="3" @bind="_note"></textarea>
+                        </div>
+                    </div>
+                    @if (_message is not null) { <div class="alert alert-success mt-2 mb-0">@_message</div> }
+                    @if (_error is not null) { <div class="alert alert-danger mt-2 mb-0">@_error</div> }
+                    <button class="btn btn-success mt-3" @onclick="SaveAsync">Kaydet</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private IReadOnlyList<DesignRequestListItemDto> _items = [];
+    private DesignRequestDetailDto? _detail;
+    private DesignRequestStatus? _statusFilter;
+    private bool _onlyOverdue;
+    private DesignRequestStatus _status;
+    private string? _note, _message, _error;
+
+    public static string StatusLabel(DesignRequestStatus s) => s switch
+    {
+        DesignRequestStatus.New => "Yeni",
+        DesignRequestStatus.InProgress => "İşlemde",
+        DesignRequestStatus.Answered => "Yanıtlandı",
+        DesignRequestStatus.Closed => "Kapandı",
+        _ => s.ToString()
+    };
+
+    private static string StatusBadge(DesignRequestStatus s) => s switch
+    {
+        DesignRequestStatus.New => "bg-danger-subtle text-danger",
+        DesignRequestStatus.InProgress => "bg-warning-subtle text-warning",
+        DesignRequestStatus.Answered => "bg-success-subtle text-success",
+        _ => "bg-secondary-subtle text-secondary"
+    };
+
+    public static string TypeLabel(DesignRequestType t) => t switch
+    {
+        DesignRequestType.OzelOlcu => "Özel ölçü",
+        DesignRequestType.RenkDegisikligi => "Renk değişikliği",
+        DesignRequestType.GorselDuzenlemeKirpma => "Görsel düzenleme / kırpma",
+        DesignRequestType.OgeEkleKaldir => "Öğe ekle / kaldır",
+        _ => "Diğer"
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        _message = _error = null;
+        _detail = Id is { } id ? await Sender.Send(new GetDesignRequestQuery(id)) : null;
+        if (_detail is not null)
+        {
+            _status = _detail.Status;
+            _note = _detail.AdminNote;
+        }
+    }
+
+    private async Task LoadAsync() => _items = await Sender.Send(new GetDesignRequestsQuery(_statusFilter, _onlyOverdue));
+
+    private async Task SaveAsync()
+    {
+        _message = _error = null;
+        try
+        {
+            await Sender.Send(new UpdateDesignRequestStatusCommand(_detail!.Id, _status, _note));
+            _detail = await Sender.Send(new GetDesignRequestQuery(_detail.Id));
+            await LoadAsync();
+            _message = "Kaydedildi.";
+        }
+        catch (Exception ex) { _error = AdminErrors.Message(ex); }
+    }
+}

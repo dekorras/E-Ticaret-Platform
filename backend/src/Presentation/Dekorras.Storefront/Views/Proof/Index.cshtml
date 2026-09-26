@@ -1,0 +1,65 @@
+@model ProofPageDto
+@using Dekorras.Domain.WallCovering
+@{
+    ViewData["Title"] = $"Onay önizlemesi - {Model.OrderNumber}";
+    ViewData["MetaRobots"] = "noindex, nofollow";
+    var message = TempData["ProofMessage"] as string;
+    var error = TempData["ProofError"] as string;
+}
+<div class="py-3" style="max-width: 1000px">
+    <h1 class="h4">Baskı onay önizlemesi</h1>
+    <p class="text-muted mb-2">Sipariş <strong>@Model.OrderNumber</strong> · @Model.ProductName</p>
+    <p class="mb-3">@Model.WidthCm.ToString("0.#") × @Model.HeightCm.ToString("0.#") cm · @Model.MaterialName · @Model.PanelCount panel</p>
+
+    @if (message is not null) { <div class="alert alert-success">@message</div> }
+    @if (error is not null) { <div class="alert alert-danger">@error</div> }
+
+    @if (Model.PreviewUrl is null)
+    {
+        <div class="alert alert-info">Önizlemeniz hazırlanıyor. Birkaç dakika içinde bu sayfayı yenileyin; hazır olduğunda e-postayla da bildireceğiz.</div>
+    }
+    else
+    {
+        <figure class="mb-3">
+            <img src="@Model.PreviewUrl" alt="@Model.ProductName baskı önizlemesi" class="img-fluid border rounded" />
+            <figcaption class="small text-muted mt-1">Kırmızı kesikli çizgi: duvarınızın ölçüsü. Açık renkli kenar: kesim/montaj payı. Siyah kesikli çizgiler: panel ek yerleri.</figcaption>
+        </figure>
+    }
+
+    @switch (Model.Status)
+    {
+        case ProofStatus.Onaylandi:
+            <div class="alert alert-success">Bu tasarım onaylandı. Siparişiniz üretime alınacak.</div>
+            break;
+        case ProofStatus.RevizyonIstendi:
+            <div class="alert alert-warning">Revizyon istediniz: <em>@Model.CustomerNote</em><br />Güncellenmiş önizleme hazır olduğunda size tekrar e-posta göndereceğiz.</div>
+            break;
+        default:
+            if (Model.PreviewUrl is not null)
+            {
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <form method="post" action="/siparis-onay/@Model.Token">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="decision" value="approve" />
+                            <button type="submit" class="btn btn-success w-100"><i class="bi bi-check2-circle"></i> Onaylıyorum, üretime alın</button>
+                        </form>
+                        @if (Model.AutoApproveAtUtc is { } at)
+                        {
+                            <p class="small text-muted mt-2">@at.ToLocalTime().ToString("dd.MM.yyyy HH:mm") tarihine kadar yanıt vermezseniz tasarım onaylanmış sayılır.</p>
+                        }
+                    </div>
+                    <div class="col-md-7">
+                        <form method="post" action="/siparis-onay/@Model.Token">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="decision" value="revise" />
+                            <label for="proofNote" class="form-label">Revizyon isteği</label>
+                            <textarea id="proofNote" name="note" class="form-control mb-2" rows="3" required maxlength="2000" placeholder="Ne değiştirmek istiyorsunuz? (ör. görseli biraz sola kaydırın)"></textarea>
+                            <button type="submit" class="btn btn-outline-warning">Revizyon iste</button>
+                        </form>
+                    </div>
+                </div>
+            }
+            break;
+    }
+</div>

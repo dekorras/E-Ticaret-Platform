@@ -1,4 +1,7 @@
+using System.Text.Json;
 using Dekorras.Application.Catalog;
+using Dekorras.Application.WallCovering;
+using Dekorras.Domain.WallCovering;
 using Dekorras.Application.Common.Interfaces;
 using Dekorras.Domain.Catalog;
 using Dekorras.Domain.Customers;
@@ -50,7 +53,7 @@ public sealed class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCom
     }
 }
 
-public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRegistry providerRegistry, ISecretProtector secretProtector, IEmailSender emailSender)
+public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRegistry providerRegistry, ISecretProtector secretProtector, IEmailSender emailSender, IPricingService pricingService)
     : IRequestHandler<PlaceOrderCommand, PlaceOrderResult>
 {
     // Admin'de "Ağırlık (kg)" alanı boş bırakılan (Product.Weight == null) ürünler için kargo
@@ -67,6 +70,16 @@ public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRe
         if (cart.Items.Count == 0)
             throw new InvalidOperationException("Sepet boş.");
 
+        // Konfigüratörden önce ÖLÇÜSÜZ (eski sabit fiyatla) eklenmiş duvar kağıdı/poster satırı siparişe dönüştürülemez:
+        // ürün artık m² fiyatıyla, ölçüye özel üretiliyor. Müşteri ölçü seçmeli ya da satırı kaldırmalı.
+        var legacyWall = GetCartQueryHandler.LegacyWallProductIds(unitOfWork, cart.Items.Where(i => !i.IsConfigured).Select(i => i.ProductId));
+        if (legacyWall.Count > 0)
+        {
+            var names = unitOfWork.Repository<Product>().Query().Where(p => legacyWall.Contains(p.Id))
+                .Select(p => p.Translations.Where(t => t.LanguageCode == "tr").Select(t => t.Name).FirstOrDefault() ?? p.ProductCode).ToList();
+            throw new InvalidOperationException($"Sepetinizde ölçüsü seçilmemiş ölçüye özel ürün var: {string.Join(", ", names)}. Lütfen sepetten ölçüsünü seçin veya ürünü kaldırın.");
+        }
+
         var providerRepository = unitOfWork.Repository<IntegrationProvider>();
 
         var paymentProvider = GetActiveProviderOrThrow(providerRepository, request.PaymentProviderKey, ProviderCategory.Payment, "ödeme sağlayıcısı");
@@ -81,6 +94,23 @@ public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRe
         var customer = string.IsNullOrEmpty(request.IdentityUserId)
             ? null
             : customerRepository.Query().FirstOrDefault(c => c.IdentityUserId == request.IdentityUserId);
+
+        if (customer is null)
+        {
+            // Customers.Email benzersiz indekslidir: aynı e-postayla ikinci misafir siparişi daha önce
+            // DbUpdateException ile çöküyordu. Önceki misafir kaydı yeniden kullanılır; e-posta kayıtlı
+            // (üye) bir hesaba aitse sipariş o hesaba iliştirilMEZ - başkasının e-postasını yazan biri
+            // onun "Siparişlerim" sayfasına sipariş ekleyememeli.
+            var normalizedEmail = request.Email.Trim().ToLower();
+            var existingByEmail = customerRepository.Query().FirstOrDefault(c => c.Email.ToLower() == normalizedEmail);
+            if (existingByEmail is not null)
+            {
+                if (!existingByEmail.IdentityUserId.StartsWith("guest-"))
+                    throw new InvalidOperationException("Bu e-posta adresiyle kayıtlı bir hesap var. Lütfen giriş yaparak devam edin.");
+                customer = existingByEmail;
+                customer.UpdateContact(request.FullName, request.PhoneNumber);
+            }
+        }
 
         if (customer is null)
         {
@@ -107,10 +137,43 @@ public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRe
         var totalWeightKg = 0m;
         var hsCodes = new List<string>();
         var itemNames = new List<string>();
-        foreach (var item in cart.Items)
+
+        // Ölçüye özel duvar kağıdı kuralları (bkz. Application.WallCovering.CartTotalsCalculator):
+        // tutkal satırları EN SONA alınır ki ücretsiz tutkal eşiği, diğer tüm kalemlerin checkout
+        // anında yeniden hesaplanmış ara toplamına (order.SubTotalTry) göre değerlendirilebilsin.
+        var wallSettings = WallCoveringSettings.Load(unitOfWork);
+        var glueProductIds = CartTotalsCalculator.GlueProductIds(unitOfWork);
+        var requiresGlue = CartTotalsCalculator.RequiresGlueResolver(unitOfWork);
+        bool IsGlueLine(CartItem i) => !i.IsConfigured && glueProductIds.Contains(i.ProductId);
+        var glueDemand = cart.Items.Where(i => i.IsConfigured && requiresGlue(i.ConfigurationJson)).Sum(i => i.Quantity);
+        var glueQuantityInCart = cart.Items.Where(IsGlueLine).Sum(i => i.Quantity);
+        int? freeGlueUnitsRemaining = null;
+
+        foreach (var item in cart.Items.OrderBy(i => IsGlueLine(i) ? 1 : 0))
         {
             var product = await productRepository.GetByIdAsync(item.ProductId, cancellationToken);
             if (product is null) continue;
+
+            if (item.IsConfigured)
+            {
+                // Fiyat checkout ANINDA güncel malzeme fiyatıyla yeniden hesaplanır; istemciden veya
+                // sepetten gelen tutar kullanılmaz. Konfigürasyon ve kırılım siparişe DONDURULUR.
+                var configuration = WallConfiguration.FromJson(item.ConfigurationJson)
+                    ?? throw new InvalidOperationException("Sepetteki ölçüye özel ürünün konfigürasyonu okunamadı.");
+                var quote = pricingService.QuoteLine(product.Id, configuration, 1);
+                if (!quote.IsValid)
+                    throw new InvalidOperationException($"'{quote.ProductName}': {string.Join(" ", quote.Errors.Values)}");
+
+                var line = quote.Line! with { Quantity = item.Quantity, LineTotal = quote.Line!.UnitPrice * item.Quantity };
+                var configuredName = $"{quote.ProductName} ({line.WidthCm:0.#}×{line.HeightCm:0.#} cm, {line.MaterialName})";
+                order.AddConfiguredItem(product.Id, configuredName, line.UnitPrice, item.Quantity, quote.TaxRatePercentage,
+                    configuration.ToJson(), JsonSerializer.Serialize(line));
+
+                // VARSAYIM: ölçüye özel ürünün kargo ağırlığı, faturalanan m² × malzeme gramajıdır (+ %20 ambalaj).
+                totalWeightKg += line.BilledAreaM2 * quote.Material!.WeightGsm / 1000m * 1.2m * item.Quantity;
+                itemNames.Add(configuredName);
+                continue;
+            }
 
             // product.Translations pasif gezinme ile dokunulamaz (bkz. README "Önemli mimari not") -
             // ayrı bir sorgu ile alınıyor. Sipariş kalemine müşterinin gördüğü ürün ADI yazılır,
@@ -154,7 +217,23 @@ public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRe
                 product.UpdateStock(product.StockQuantity - item.Quantity);
             }
 
-            order.AddItem(product.Id, productName, unitPriceTry, item.Quantity, product.TaxRatePercentage, item.VariantId);
+            if (IsGlueLine(item))
+            {
+                // Tutkal satırları döngünün sonunda: order.SubTotalTry artık tutkal HARİÇ ara toplamdır.
+                freeGlueUnitsRemaining ??= CartTotalsCalculator.GlueFreeUnits(order.SubTotalTry, glueDemand, glueQuantityInCart, wallSettings.GlueFreeThresholdTry);
+                var freeUnits = Math.Min(freeGlueUnitsRemaining.Value, item.Quantity);
+                if (freeUnits > 0)
+                {
+                    order.AddItem(product.Id, $"{productName} (ücretsiz)", 0m, freeUnits, product.TaxRatePercentage, item.VariantId);
+                    freeGlueUnitsRemaining -= freeUnits;
+                }
+                if (item.Quantity - freeUnits > 0)
+                    order.AddItem(product.Id, productName, unitPriceTry, item.Quantity - freeUnits, product.TaxRatePercentage, item.VariantId);
+            }
+            else
+            {
+                order.AddItem(product.Id, productName, unitPriceTry, item.Quantity, product.TaxRatePercentage, item.VariantId);
+            }
             totalWeightKg += (product.Weight ?? DefaultItemWeightKg) * item.Quantity;
             if (!string.IsNullOrWhiteSpace(product.HsCode)) hsCodes.Add(product.HsCode);
             itemNames.Add(productName);
@@ -179,7 +258,7 @@ public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRe
         if (cart.CouponCode is not null)
         {
             appliedCoupon = unitOfWork.Repository<Coupon>().Query().FirstOrDefault(c => c.Code == cart.CouponCode);
-            if (appliedCoupon is not null && appliedCoupon.IsValidNow(DateTime.UtcNow))
+            if (appliedCoupon is not null && appliedCoupon.IsValidNow(DateTime.UtcNow) && IsWithinPerUserLimit(appliedCoupon, request.Email))
             {
                 var discount = appliedCoupon.CalculateDiscount(order.SubTotalTry);
                 order.ApplyCoupon(appliedCoupon.Code, discount);
@@ -216,6 +295,10 @@ public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRe
         var rateQuote = await cargoGateway.GetRateAsync(cargoConfig, request.CountryCode, totalWeightKg, cancellationToken);
         order.SetShippingCost(cargoProvider.Id, rateQuote.PriceTry);
 
+        // Ücretsiz kargo eşiği (admin ayarı, varsayılan kapalı) indirim SONRASI ara toplama göre.
+        if (CartTotalsCalculator.IsFreeShipping(order.SubTotalTry - order.DiscountTotalTry, wallSettings.FreeShippingThresholdTry))
+            order.SetShippingCost(cargoProvider.Id, 0m);
+
         // Hediye çeki, checkout ANINDA yeniden doğrulanır (bkz. GetCartQuery'deki önizleme - kargo
         // ücreti orada henüz bilinmiyordu). Coupon/Campaign'in AKSİNE bir indirim değil bir ödeme
         // yöntemidir - ikisiyle BİRLİKTE kullanılabilir (bkz. Order.ApplyGiftVoucher belgesi).
@@ -236,6 +319,8 @@ public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRe
         }
 
         await unitOfWork.Repository<Order>().AddAsync(order, cancellationToken);
+        // Ölçüye özel kalemler için onay önizlemesi + üretim dosyası kayıtları siparişle AYNI işlemde açılır.
+        await WallOrderSupport.CreateProductionTasksAsync(unitOfWork, order, cancellationToken);
         appliedCoupon?.RegisterUsage(); // Update() BİLİNÇLİ OLARAK çağrılmaz - yalnızca skaler bir alan değişiyor.
         appliedCampaign?.RegisterUsage();
         if (giftVoucherAmountApplied > 0) appliedGiftVoucher!.Redeem(giftVoucherAmountApplied);
@@ -256,7 +341,22 @@ public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRe
 
         await SendOrderConfirmationEmailAsync(order, request.Email, request.FullName, cancellationToken);
 
-        return new PlaceOrderResult(order.Id, order.OrderNumber, rateQuote.PriceTry, authResult.Success, authResult.FailureReason);
+        return new PlaceOrderResult(order.Id, order.OrderNumber, order.ShippingTotalTry, authResult.Success, authResult.FailureReason);
+    }
+
+    /// <summary>Kuponun kişi başı limiti: aynı e-posta adresine sahip müşterilerin bu kuponla verdiği
+    /// önceki siparişler sayılır. Misafir siparişlerinde her seferinde yeni Customer oluştuğu için
+    /// müşteri kimliği yerine e-posta kullanılır.</summary>
+    private bool IsWithinPerUserLimit(Coupon coupon, string email)
+    {
+        if (coupon.PerUserLimit is not int limit) return true;
+
+        var normalizedEmail = email.Trim().ToLower();
+        var used = unitOfWork.Repository<Order>().Query()
+            .Where(o => o.CouponCode == coupon.Code && o.Status != OrderStatus.Cancelled)
+            .Join(unitOfWork.Repository<Customer>().Query(), o => o.CustomerId, c => c.Id, (o, c) => c.Email)
+            .Count(e => e.ToLower() == normalizedEmail);
+        return used < limit;
     }
 
     /// <summary>`IEmailSender`/`EmailTemplate`/`NotificationLog` Faz 0/1'den beri hazırdı (Infrastructure
@@ -279,7 +379,7 @@ public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRe
                 ?? "<p>Sayın {{CustomerName}},</p><p>{{OrderNumber}} numaralı siparişiniz alınmıştır. Tutar: {{GrandTotal}} ₺.</p>";
 
             subject = ApplyPlaceholders(subject, order, customerName);
-            bodyHtml = ApplyPlaceholders(bodyHtml, order, customerName);
+            bodyHtml = ApplyPlaceholders(bodyHtml, order, customerName) + WallPreviewLinksHtml(order);
 
             await emailSender.SendAsync(toEmail, subject, bodyHtml, cancellationToken);
             success = true;
@@ -292,6 +392,22 @@ public sealed class PlaceOrderCommandHandler(IUnitOfWork unitOfWork, IProviderRe
         await unitOfWork.Repository<NotificationLog>().AddAsync(
             new NotificationLog(NotificationChannel.Email, toEmail, templateKey, success), cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Ölçüye özel kalemler için "Siparişini duvarında gör" bağlantıları (spec 1.6.6-A, kaynak: e-posta).</summary>
+    private string WallPreviewLinksHtml(Order order)
+    {
+        var configured = order.Items.Where(i => i.ConfigurationJson is not null).ToList();
+        if (configured.Count == 0) return "";
+
+        var ids = configured.Select(i => i.ProductId).ToList();
+        var slugs = unitOfWork.Repository<Product>().Query().Where(p => ids.Contains(p.Id)).ToDictionary(p => p.Id, p => p.Slug);
+        var baseUrl = WallOrderSupport.BaseUrl(WallCoveringSettings.Load(unitOfWork));
+        var links = configured.Where(i => slugs.ContainsKey(i.ProductId)).Select(i =>
+            $"<li><a href=\"{System.Net.WebUtility.HtmlEncode(WallPreviewUrl.Build(slugs[i.ProductId], WallConfiguration.FromJson(i.ConfigurationJson), source: "e-posta", baseUrl: baseUrl))}\">" +
+            $"{System.Net.WebUtility.HtmlEncode(i.ProductName)}</a></li>");
+        return $"<p><strong>Siparişini duvarında gör:</strong></p><ul>{string.Concat(links)}</ul>" +
+               "<p>Ölçüye özel ürünleriniz için baskı öncesi onay önizlemesi ayrıca e-postayla gönderilecektir.</p>";
     }
 
     private static string ApplyPlaceholders(string text, Order order, string customerName) => text

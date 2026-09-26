@@ -1,0 +1,164 @@
+@model WallCatalogPageModel
+@{
+    var request = Model.Request;
+    var result = Model.Result;
+    ViewData["Title"] = "Duvar Kağıtları ve Posterler - Ölçüye Özel";
+    ViewData["MetaDescription"] = $"Ölçünüze özel üretilen duvar kağıtları ve posterler. {Model.FromPricePerM2:N0} ₺/m²'den başlayan fiyatlarla, duvarınızda deneyin.";
+    bool Sel(string? current, string value) => string.Equals(current, value, StringComparison.OrdinalIgnoreCase);
+}
+@section Styles {
+    <link rel="canonical" href="@($"{Context.Request.Scheme}://{Context.Request.Host}/duvar-kagitlari{(request.Page > 1 ? $"?page={request.Page}" : "")}")" />
+    @if (request.Page > 1)
+    {
+        <link rel="prev" href="/duvar-kagitlari@(request.QueryString(request.Page - 1))" />
+    }
+    @if (request.Page < result.TotalPages)
+    {
+        <link rel="next" href="/duvar-kagitlari@(request.QueryString(request.Page + 1))" />
+    }
+}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Anasayfa</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Duvar Kağıtları</li>
+    </ol>
+</nav>
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-1">Ölçüye Özel Duvar Kağıtları ve Posterler</h1>
+        <p class="text-muted mb-0"><span data-wall-total>@result.TotalCount</span> tasarım · @Html.Money(Model.FromPricePerM2)/m²'den başlayan fiyatlarla</p>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        <label for="wallSort" class="small text-muted">Sırala</label>
+        <select id="wallSort" name="sort" form="wallFilters" class="form-select form-select-sm" style="width:auto">
+            <option value="" selected="@(string.IsNullOrEmpty(request.Sort))">Çok satan</option>
+            <option value="yeni" selected="@(request.Sort == "yeni")">En yeni</option>
+            <option value="fiyat-artan" selected="@(request.Sort == "fiyat-artan")">Fiyat (artan)</option>
+            <option value="fiyat-azalan" selected="@(request.Sort == "fiyat-azalan")">Fiyat (azalan)</option>
+        </select>
+        <button class="btn btn-sm btn-outline-secondary d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#wallFilterPanel">
+            <i class="bi bi-funnel"></i> Filtrele
+        </button>
+    </div>
+</div>
+
+<div class="row g-4" data-wall-catalog>
+    <aside class="col-lg-3">
+        <div class="offcanvas-lg offcanvas-start" tabindex="-1" id="wallFilterPanel" aria-labelledby="wallFilterTitle">
+            <div class="offcanvas-header">
+                <h2 class="offcanvas-title h5" id="wallFilterTitle">Filtreler</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#wallFilterPanel" aria-label="Kapat"></button>
+            </div>
+            <div class="offcanvas-body d-block">
+                <form id="wallFilters" method="get" action="/duvar-kagitlari" class="wall-filters" data-wall-filters>
+                    <div class="mb-3">
+                        <label for="wallSearch" class="form-label fw-semibold">Ara</label>
+                        <input id="wallSearch" type="search" name="q" value="@request.Q" class="form-control form-control-sm" placeholder="Tasarım adı veya kod" />
+                    </div>
+
+                    @if (Model.Categories.Count > 0)
+                    {
+                        <div class="mb-3">
+                            <label for="wallCategory" class="form-label fw-semibold">Kategori</label>
+                            <select id="wallCategory" name="category" class="form-select form-select-sm" data-wall-category>
+                                <option value="">Tüm kategoriler</option>
+                                @foreach (var cat in Model.Categories)
+                                {
+                                    <option value="@cat.Slug" selected="@(string.Equals(request.Category, cat.Slug, StringComparison.OrdinalIgnoreCase))">@(new string(' ', cat.Depth * 2))@(cat.Depth > 0 ? "– " : "")@cat.Name (@cat.ProductCount)</option>
+                                }
+                            </select>
+                        </div>
+                    }
+
+                    <fieldset class="mb-3">
+                        <legend class="wall-filter-legend">Tür</legend>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="type" id="typeAll" value="" checked="@(string.IsNullOrEmpty(request.Type))" /><label class="form-check-label" for="typeAll">Tümü</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="type" id="typeMural" value="mural" checked="@(Sel(request.Type, "mural"))" /><label class="form-check-label" for="typeMural">Tek parça poster</label></div>
+                        <div class="form-check"><input class="form-check-input" type="radio" name="type" id="typePattern" value="pattern" checked="@(Sel(request.Type, "pattern"))" /><label class="form-check-label" for="typePattern">Desenli (tekrarlı)</label></div>
+                    </fieldset>
+
+                    <fieldset class="mb-3">
+                        <legend class="wall-filter-legend">Yönelim</legend>
+                        <div class="btn-group btn-group-sm flex-wrap" role="group">
+                            @foreach (var (value, label) in new[] { ("", "Tümü"), ("yatay", "Yatay"), ("dikey", "Dikey"), ("kare", "Kare") })
+                            {
+                                <input type="radio" class="btn-check" name="orientation" id="or-@(value == "" ? "all" : value)" value="@value" checked="@(string.Equals(request.Orientation ?? "", value, StringComparison.OrdinalIgnoreCase))" />
+                                <label class="btn btn-outline-secondary" for="or-@(value == "" ? "all" : value)">@label</label>
+                            }
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="mb-3">
+                        <legend class="wall-filter-legend">Renge göre ara</legend>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="color" class="form-control form-control-color" id="wallColor" value="@(request.Color ?? "#7f8c8d")" data-wall-color aria-label="Renk seç" />
+                            <input type="hidden" name="color" value="@request.Color" data-wall-color-value />
+                            <button type="button" class="btn btn-sm btn-link @(string.IsNullOrEmpty(request.Color) ? "d-none" : "")" data-wall-color-clear>Rengi temizle</button>
+                        </div>
+                        <noscript><input type="text" name="color" value="@request.Color" class="form-control form-control-sm mt-1" placeholder="#RRGGBB" /></noscript>
+                    </fieldset>
+
+                    @foreach (var group in result.TagGroups)
+                    {
+                        <fieldset class="mb-3">
+                            <legend class="wall-filter-legend">@group.Label</legend>
+                            <div class="@(group.Group == "color" ? "wall-color-tags" : "")">
+                                @foreach (var tag in group.Tags)
+                                {
+                                    var id = "tag-" + tag.Key.Replace(':', '-');
+                                    <div class="form-check @(group.Group == "color" ? "form-check-inline" : "")">
+                                        <input class="form-check-input" type="checkbox" name="tag" id="@id" value="@tag.Key" checked="@tag.Selected" />
+                                        <label class="form-check-label" for="@id">
+                                            @if (tag.Hex is not null)
+                                            {
+                                                <span class="wall-color-dot" style="background:@tag.Hex"></span>
+                                            }
+                                            @tag.Label <span class="text-muted small">(@tag.Count)</span>
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                        </fieldset>
+                    }
+
+                    <noscript><button type="submit" class="btn btn-primary btn-sm w-100">Uygula</button></noscript>
+                    <a href="/duvar-kagitlari" class="btn btn-link btn-sm px-0" data-wall-reset>Filtreleri temizle</a>
+                </form>
+            </div>
+        </div>
+    </aside>
+
+    <section class="col-lg-9" aria-live="polite">
+        <div data-wall-results>
+            <partial name="_WallGrid" model="result" />
+        </div>
+        <div class="text-center py-3 d-none" data-wall-loading><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Yükleniyor</span></div></div>
+        <div data-wall-sentinel aria-hidden="true"></div>
+
+        @if (result.TotalPages > 1)
+        {
+            <nav aria-label="Sayfalar" data-wall-pagination>
+                <ul class="pagination pagination-sm justify-content-center flex-wrap mt-3">
+                    @if (request.Page > 1)
+                    {
+                        <li class="page-item"><a class="page-link" href="/duvar-kagitlari@(request.QueryString(request.Page - 1))">Önceki</a></li>
+                    }
+                    @for (var p = Math.Max(1, request.Page - 3); p <= Math.Min(result.TotalPages, request.Page + 3); p++)
+                    {
+                        <li class="page-item @(p == request.Page ? "active" : "")"><a class="page-link" href="/duvar-kagitlari@(request.QueryString(p))">@p</a></li>
+                    }
+                    @if (request.Page < result.TotalPages)
+                    {
+                        <li class="page-item"><a class="page-link" href="/duvar-kagitlari@(request.QueryString(request.Page + 1))">Sonraki</a></li>
+                    }
+                </ul>
+            </nav>
+        }
+    </section>
+</div>
+
+@section Scripts {
+    <script src="~/js/wall/wall-catalog.js" asp-append-version="true"></script>
+}

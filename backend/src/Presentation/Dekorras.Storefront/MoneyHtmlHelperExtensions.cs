@@ -9,6 +9,8 @@ namespace Dekorras.Storefront;
 /// senkron kalabilir (bkz. `CurrencyResultFilter` dokümantasyonu).</summary>
 public static class MoneyHtmlHelperExtensions
 {
+    private static readonly CultureInfo TurkishCulture = CultureInfo.GetCultureInfo("tr-TR");
+
     public static IHtmlContent Money(this IHtmlHelper html, decimal tryAmount) => new HtmlString(html.MoneyText(tryAmount));
 
     /// <summary>`Money`'nin düz metin hâli - `&lt;option&gt;` etiketi gibi HTML işaretlemesinin
@@ -20,6 +22,8 @@ public static class MoneyHtmlHelperExtensions
         var decimalDigits = html.ViewData["CurrencyDecimalDigits"] as int? ?? 2;
 
         var converted = tryAmount * rate;
-        return $"{converted.ToString("N" + decimalDigits, CultureInfo.InvariantCulture)} {symbol}";
+        // TRY daima tr-TR biçiminde gösterilir ("1.499,00 ₺"); diğer para birimleri eskisi gibi (1,499.00).
+        var culture = symbol == "₺" ? TurkishCulture : CultureInfo.InvariantCulture;
+        return $"{converted.ToString("N" + decimalDigits, culture)} {symbol}";
     }
 }

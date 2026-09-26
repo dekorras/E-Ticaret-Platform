@@ -65,6 +65,7 @@
     <link rel="stylesheet" href="~/css/mega-menu.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/product-grid.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/quickview.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/wall.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Dekorras.Storefront.styles.css" asp-append-version="true" />
     @if (isRtl)
     {
@@ -140,6 +141,13 @@
                                 <li><a class="dropdown-item" asp-controller="Account" asp-action="Register">@Localizer["Üye Ol"]</a></li>
                             }
                         </ul>
+                    </li>
+                    <li class="nav-item">
+                        @* Ölçüye özel duvar kağıdı/poster görsel kataloğu ("Duvarımda Dene" listesi ve "Duvarında Gör" buradan). *@
+                        <a class="nav-link text-dark" href="/duvar-kagitlari" data-wall-nav>
+                            <i class="bi bi-image"></i>
+                            <span class="d-none d-lg-inline">@Localizer["Duvarımda Dene"]</span>
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link text-dark" asp-controller="Compare" asp-action="Index">
@@ -324,6 +332,8 @@
     <script src="~/js/site.js" asp-append-version="true"></script>
     <script src="~/js/header.js" asp-append-version="true"></script>
     <script src="~/js/quickview.js" asp-append-version="true"></script>
+    <script src="~/js/wall/wall-lists.js" asp-append-version="true"></script>
+    <script src="~/js/wall/wall-preview-link.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 
     <div class="modal fade" id="dkQuickviewModal" tabindex="-1" aria-hidden="true">

@@ -1,0 +1,115 @@
+@page "/admin/wall/report"
+@attribute [Authorize(Policy = "ECommerceAccess")]
+@rendermode InteractiveServer
+@using Dekorras.Application.WallCovering
+@inject MediatR.ISender Sender
+
+<PageTitle>Duvarında Gör Raporu</PageTitle>
+
+<div class="page-title-box d-sm-flex align-items-center justify-content-between">
+    <h4 class="mb-sm-0">"Duvarında Gör" Dönüşüm Raporu</h4>
+    <div class="d-flex gap-2 align-items-center">
+        <input type="date" class="form-control" @bind="_from" />
+        <span>–</span>
+        <input type="date" class="form-control" @bind="_to" />
+        <button class="btn btn-primary" @onclick="LoadAsync">Göster</button>
+    </div>
+</div>
+<p class="text-muted">Dönüşüm = görüntüleyiciden sepete ekleme olayı / "Duvarında Gör" bağlantı tıklaması (aynı dönem, olay bazlı).</p>
+
+@if (_report is not null)
+{
+    <div class="row">
+        @foreach (var (label, value) in new (string, string)[]
+        {
+            ("Bağlantı tıklaması", _report.LinkClicks.ToString("N0")),
+            ("Sahne değişimi", _report.SceneChanges.ToString("N0")),
+            ("Ürün değişimi", _report.ProductSwaps.ToString("N0")),
+            ("Sepete ekleme", _report.AddToCarts.ToString("N0")),
+            ("Dönüşüm", $"%{_report.ConversionRate * 100:0.0}")
+        })
+        {
+            <div class="col">
+                <div class="card card-animate"><div class="card-body">
+                    <p class="text-uppercase fw-medium text-muted mb-1 fs-12">@label</p>
+                    <h4 class="mb-0">@value</h4>
+                </div></div>
+            </div>
+        }
+    </div>
+
+    <div class="row">
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header"><h5 class="card-title mb-0">Kaynağa göre</h5></div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Kaynak</th><th class="text-end">Tıklama</th><th class="text-end">Sepete ekleme</th><th class="text-end">Dönüşüm</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _report.BySource)
+                            {
+                                <tr><td>@SourceLabel(r.Source)</td><td class="text-end">@r.LinkClicks</td><td class="text-end">@r.AddToCarts</td><td class="text-end">%@((r.ConversionRate * 100).ToString("0.0"))</td></tr>
+                            }
+                            @if (_report.BySource.Count == 0) { <tr><td colspan="4" class="text-muted">Bu dönemde olay yok.</td></tr> }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header"><h5 class="card-title mb-0">Günlük</h5></div>
+                <div class="card-body">
+                    @{ var max = Math.Max(1, _report.Daily.Select(d => d.LinkClicks).DefaultIfEmpty(0).Max()); }
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Gün</th><th style="width:55%">Tıklama</th><th class="text-end">Sepete ekleme</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _report.Daily)
+                            {
+                                <tr>
+                                    <td>@d.Day.ToString("dd.MM")</td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="bg-primary rounded" style="height:8px;width:@((d.LinkClicks * 100 / max).ToString())%"></div>
+                                            <span class="small">@d.LinkClicks</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-end">@d.AddToCarts</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DateTime _from = DateTime.Today.AddDays(-29);
+    private DateTime _to = DateTime.Today;
+    private WallPreviewReportDto? _report;
+
+    private static string SourceLabel(string source) => source switch
+    {
+        "detay" => "Ürün sayfası",
+        "konfigurator" => "Konfigüratör",
+        "kart" => "Katalog kartı",
+        "tepsi" => "Duvarımda Dene listesi",
+        "goruntuleyici" => "Karşılaştırma",
+        "sepet" => "Sepet",
+        "e-posta" => "E-posta",
+        "embed" => "Embed widget",
+        "" or "bilinmiyor" => "Bilinmiyor",
+        _ => source
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var from = DateTime.SpecifyKind(_from.Date, DateTimeKind.Local).ToUniversalTime();
+        var to = DateTime.SpecifyKind(_to.Date.AddDays(1), DateTimeKind.Local).ToUniversalTime();
+        _report = await Sender.Send(new GetWallPreviewReportQuery(from, to));
+    }
+}

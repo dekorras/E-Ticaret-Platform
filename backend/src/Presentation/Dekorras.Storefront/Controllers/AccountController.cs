@@ -3,6 +3,7 @@ using Dekorras.Application.Customers.Queries;
 using Dekorras.Application.Ordering.Queries;
 using Dekorras.Application.Ordering.Storefront;
 using Dekorras.Storefront.Models;
+using Dekorras.Storefront.WallCovering;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -48,6 +49,7 @@ public class AccountController(UserManager<IdentityUser> userManager, SignInMana
         // erişilemez olurdu (`Cart.CustomerId` Faz 0/1'den beri hiç set edilmiyordu).
         var sessionKey = CartSession.GetOrCreateSessionKey(HttpContext);
         await sender.Send(new MergeGuestCartIntoCustomerCommand(sessionKey, customerId));
+        await WallVisitor.MergeGuestDataAsync(HttpContext, sender, user.Id, customerId);
 
         return RedirectToAction("Index", "Home");
     }
@@ -79,12 +81,16 @@ public class AccountController(UserManager<IdentityUser> userManager, SignInMana
 
         // Bkz. Register'daki aynı not - giriş yapan müşterinin bu cihazdaki (varsa) misafir sepeti
         // müşteriye bağlanır VE müşterinin başka bir cihazda kayıtlı sepeti varsa bu cihaza taşınır.
-        var identityUserId = userManager.GetUserId(User);
+        // Not: PasswordSignInAsync çerezi YANITA yazar; bu istekte `User` hâlâ anonimdir - kimlik bu
+        // yüzden `GetUserId(User)` ile değil e-postadan çözülür (eskiden null dönüyor, birleştirme hiç çalışmıyordu).
+        var signedInUser = await userManager.FindByEmailAsync(model.Email);
+        var identityUserId = signedInUser?.Id;
         var customerId = await sender.Send(new GetMyCustomerIdQuery(identityUserId));
         if (customerId is Guid resolvedCustomerId)
         {
             var sessionKey = CartSession.GetOrCreateSessionKey(HttpContext);
             await sender.Send(new MergeGuestCartIntoCustomerCommand(sessionKey, resolvedCustomerId));
+            await WallVisitor.MergeGuestDataAsync(HttpContext, sender, identityUserId!, resolvedCustomerId);
         }
 
         return !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
@@ -124,7 +130,9 @@ public class AccountController(UserManager<IdentityUser> userManager, SignInMana
             return NotFound();
 
         var order = await sender.Send(new GetOrderByIdQuery(id));
-        return order is null ? NotFound() : View(order);
+        if (order is null) return NotFound();
+        ViewBag.WallItems = await sender.Send(new Dekorras.Application.WallCovering.GetOrderWallItemsQuery(id));
+        return View(order);
     }
 
     [Authorize]
