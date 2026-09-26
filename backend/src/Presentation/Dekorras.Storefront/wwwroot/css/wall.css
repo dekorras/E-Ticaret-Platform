@@ -263,9 +263,16 @@ html.wall-dialog-open { overflow: hidden; }
 }
 .room-handle:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
 .room-editor canvas { position: absolute; left: 0; top: 0; cursor: crosshair; }
-.room-mask-editor img { max-height: 50vh; }
-.room-mask-editor canvas { width: 100%; height: 100%; opacity: .55; }
-.room-mask-editor svg { width: 100%; height: 100%; }
+/* Eşya işaretleme: tam ekran görüş alanı + yakınlaştırılabilir sahne (fotoğraf, maske tuvali, çizim katmanı) */
+.room-mask-viewport { position: relative; overflow: hidden; height: calc(100vh - 330px); min-height: 300px; background: #1f1f1f; border-radius: .375rem; touch-action: none; user-select: none; }
+.room-mask-viewport.is-pan-tool, .room-mask-viewport.is-space-pan, .room-mask-viewport.is-pan-tool canvas, .room-mask-viewport.is-space-pan canvas { cursor: grab; }
+.room-mask-viewport.is-panning, .room-mask-viewport.is-panning canvas { cursor: grabbing; }
+.room-mask-editor { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.room-mask-editor img { display: block; width: 100%; height: 100%; max-width: none; pointer-events: none; }
+.room-mask-editor canvas, .room-mask-editor svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.room-mask-editor canvas { opacity: .55; cursor: crosshair; }
+.room-mask-editor svg { pointer-events: none; overflow: visible; }
+.room-zoom-label { min-width: 4.2rem; opacity: 1 !important; }
 .room-mask-editor polyline { fill: rgba(233, 102, 49, .15); stroke: #e96631; stroke-dasharray: 8 5; }
 .room-mask-editor .room-poly-point { fill: #fff; stroke: #e96631; stroke-width: 2; }
 .room-mask-editor .room-poly-start { fill: #e96631; stroke: #fff; stroke-width: 3; }

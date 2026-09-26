@@ -253,21 +253,24 @@ public sealed class GetWallProductDetailQueryHandler(IUnitOfWork unitOfWork) : I
 {
     public Task<WallProductDetailDto?> Handle(GetWallProductDetailQuery request, CancellationToken cancellationToken)
     {
+        // İki ayrı basit sorgu: profildeki büyük metin sütunları (LQIP base64, renkler) çeviri/görsel sıralamalı
+        // sorguya KATILMAZ. Tek sorguda SQL Server sıralama için ~44 MB bellek izni istiyor, bellek darken (SQL Express)
+        // RESOURCE_SEMAPHORE'da ~25 sn bekliyordu - ürün sayfası ve "Duvarında Gör" bu yüzden yavaşlıyordu.
         var row = unitOfWork.Repository<Product>().Query()
             .Where(p => p.Slug == request.Slug && p.Status == ProductStatus.Active)
-            .Join(unitOfWork.Repository<WallpaperProfile>().Query().Where(w => w.IsEnabled), p => p.Id, w => w.ProductId, (p, w) => new
+            .Select(p => new
             {
                 p.Id,
                 p.Slug,
                 p.ProductCode,
                 p.TaxRatePercentage,
                 Translation = p.Translations.Where(t => t.LanguageCode == "tr").Select(t => new { t.Name, t.Description, t.MetaTitle, t.MetaDescription }).FirstOrDefault(),
-                FallbackImage = p.Images.OrderByDescending(i => i.IsPrimary).ThenBy(i => i.DisplayOrder).Select(i => i.Url).FirstOrDefault(),
-                Profile = w
+                FallbackImage = p.Images.OrderByDescending(i => i.IsPrimary).ThenBy(i => i.DisplayOrder).Select(i => i.Url).FirstOrDefault()
             })
             .FirstOrDefault();
+        var profile = row is null ? null : unitOfWork.Repository<WallpaperProfile>().Query().FirstOrDefault(w => w.ProductId == row.Id && w.IsEnabled);
 
-        if (row is null) return Task.FromResult<WallProductDetailDto?>(null);
+        if (row is null || profile is null) return Task.FromResult<WallProductDetailDto?>(null);
 
         var tags = unitOfWork.Repository<ProductTag>().Query().Where(pt => pt.ProductId == row.Id)
             .Join(unitOfWork.Repository<Tag>().Query(), pt => pt.TagId, t => t.Id, (pt, t) => t)
@@ -279,7 +282,7 @@ public sealed class GetWallProductDetailQueryHandler(IUnitOfWork unitOfWork) : I
         var minOverride = unitOfWork.Repository<ProductMaterialOverride>().Query()
             .Where(o => o.ProductId == row.Id && o.IsAllowed && o.PricePerM2 != null).Select(o => o.PricePerM2).Min();
 
-        var w = row.Profile;
+        var w = profile;
         return Task.FromResult<WallProductDetailDto?>(new WallProductDetailDto(
             row.Id, row.Slug, row.Translation?.Name ?? row.ProductCode, row.Translation?.Description,
             w.PreviewUrl ?? row.FallbackImage, w.ThumbUrl ?? row.FallbackImage, w.LqipBase64,

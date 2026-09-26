@@ -171,7 +171,7 @@
         el.tabIndex = -1;
         el.setAttribute('aria-labelledby', 'roomUploadTitle');
         el.innerHTML =
-            '<div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">' +
+            '<div class="modal-dialog modal-fullscreen"><div class="modal-content">' +
             ' <div class="modal-header"><h2 class="modal-title h5" id="roomUploadTitle">Kendi odanda dene</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button></div>' +
             ' <div class="modal-body">' +
             '  <div class="alert alert-danger py-2" data-room-error hidden></div>' +
@@ -201,6 +201,13 @@
             '     <input type="radio" class="btn-check" name="roomTool" id="roomToolPoly" value="poly" checked><label class="btn btn-outline-secondary" for="roomToolPoly" title="Eşyanın çevresine tıklayarak noktalar koyun, ilk noktaya tıklayınca kapanır"><i class="bi bi-bounding-box-circles"></i> Çevresini çiz</label>' +
             '     <input type="radio" class="btn-check" name="roomTool" id="roomToolPaint" value="paint"><label class="btn btn-outline-secondary" for="roomToolPaint"><i class="bi bi-brush"></i> Fırça</label>' +
             '     <input type="radio" class="btn-check" name="roomTool" id="roomToolErase" value="erase"><label class="btn btn-outline-secondary" for="roomToolErase"><i class="bi bi-eraser"></i> Silgi</label>' +
+            '     <input type="radio" class="btn-check" name="roomTool" id="roomToolPan" value="pan"><label class="btn btn-outline-secondary" for="roomToolPan" title="Yakınlaştırılmış fotoğrafı sürükleyerek kaydırın (her araçta Boşluk tuşunu basılı tutarak da kaydırabilirsiniz)"><i class="bi bi-arrows-move"></i> El (kaydır)</label>' +
+            '    </div>' +
+            '    <div class="btn-group btn-group-sm ms-lg-2" role="group" aria-label="Yakınlaştırma">' +
+            '     <button type="button" class="btn btn-outline-secondary" data-room-zoom-out aria-label="Uzaklaştır"><i class="bi bi-zoom-out"></i></button>' +
+            '     <span class="btn btn-outline-secondary disabled room-zoom-label" data-room-zoom-label>100%</span>' +
+            '     <button type="button" class="btn btn-outline-secondary" data-room-zoom-in aria-label="Yakınlaştır"><i class="bi bi-zoom-in"></i></button>' +
+            '     <button type="button" class="btn btn-outline-secondary" data-room-zoom-fit title="Fotoğrafı ekrana sığdır"><i class="bi bi-fullscreen-exit"></i> Sığdır</button>' +
             '    </div>' +
             '    <label class="small" data-room-brush-box hidden>Fırça boyu <input type="range" min="5" max="120" value="40" data-room-brush></label>' +
             '    <button type="button" class="btn btn-sm btn-outline-primary" data-room-poly-close hidden>Şekli kapat</button>' +
@@ -209,7 +216,10 @@
             '    <button type="button" class="btn btn-sm btn-link text-danger" data-room-clear>Tümünü temizle</button>' +
             '   </div>' +
             '   <p class="small text-muted mb-2" data-room-tool-help>Eşyanın kenarları boyunca tıklayarak noktalar koyun; ilk noktaya tıklayınca (veya çift tıklayınca) alan işaretlenir. Birden çok eşya için tekrarlayın.</p>' +
-            '   <div class="room-editor room-mask-editor" data-room-mask-editor><img data-room-mask-img alt="" crossorigin="anonymous" /><canvas data-room-mask-canvas></canvas><svg data-room-poly-svg aria-hidden="true"><polyline data-room-poly-line /></svg></div>' +
+            '   <div class="room-mask-viewport" data-room-viewport title="Fare tekerleğiyle yakınlaştırın; kaydırmak için El aracını seçin ya da Boşluk tuşunu basılı tutup sürükleyin">' +
+            '    <div class="room-mask-editor" data-room-mask-editor><img data-room-mask-img alt="" crossorigin="anonymous" draggable="false" /><canvas data-room-mask-canvas></canvas><svg data-room-poly-svg aria-hidden="true"><polyline data-room-poly-line /></svg></div>' +
+            '   </div>' +
+            '   <p class="small text-muted mt-1 mb-0">Yakınlaştırma: fare tekerleği veya +/− düğmeleri · Kaydırma: "El" aracı, Boşluk + sürükle ya da orta tuşla sürükle · İnce kenarları yakınlaştırıp işaretleyin.</p>' +
             '  </section>' +
             ' </div>' +
             ' <div class="modal-footer">' +
@@ -368,11 +378,100 @@
         }
         function updateToolUi() {
             var t = tool();
-            q('[data-room-brush-box]').hidden = t === 'poly';
+            q('[data-room-brush-box]').hidden = t === 'poly' || t === 'pan';
             q('[data-room-tool-help]').textContent = t === 'poly'
                 ? 'Eşyanın kenarları boyunca tıklayarak noktalar koyun; ilk noktaya tıklayınca (veya çift tıklayınca) alan işaretlenir. Birden çok eşya için tekrarlayın.'
-                : t === 'paint' ? 'Eşyanın üzerini boyayın. İnce kenarlar için fırçayı küçültün.' : 'Yanlış işaretlenen yerleri silin.';
-            if (t !== 'poly' && poly.length) { poly = []; drawPolyPreview(null); }
+                : t === 'paint' ? 'Eşyanın üzerini boyayın. İnce kenarlar için yakınlaştırın veya fırçayı küçültün.'
+                : t === 'erase' ? 'Yanlış işaretlenen yerleri silin.'
+                : 'Fotoğrafı sürükleyerek kaydırın; fare tekerleğiyle yakınlaştırın.';
+            q('[data-room-viewport]').classList.toggle('is-pan-tool', t === 'pan');
+            if ((t === 'paint' || t === 'erase') && poly.length) { poly = []; drawPolyPreview(null); }
+        }
+
+        // ---- Yakınlaştırma / kaydırma ----
+        // Fotoğraf + maske + çizim katmanı tek bir "sahne" öğesinde; ölçek ve kaydırma CSS transform ile uygulanır.
+        // toImage() getBoundingClientRect ile çalıştığı için boyama/çizim koordinatları yakınlaştırmada da doğrudur;
+        // fırça kalınlığı ekran pikseline göre kalır (yakınlaştırınca fotoğrafta daha ince iz → hassas kenar).
+        var view = { s: 1, x: 0, y: 0, baseW: 0, baseH: 0 }, MAX_ZOOM = 8, spaceDown = false, panDrag = null;
+        function viewportEl() { return q('[data-room-viewport]'); }
+        function applyView() {
+            var editor = q('[data-room-mask-editor]');
+            editor.style.width = view.baseW + 'px';
+            editor.style.height = view.baseH + 'px';
+            editor.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.s + ')';
+            q('[data-room-zoom-label]').textContent = Math.round(view.s * 100) + '%';
+        }
+        function clampView() {
+            var vp = viewportEl(), w = view.baseW * view.s, h = view.baseH * view.s;
+            var vw = vp.clientWidth, vh = vp.clientHeight;
+            // Sahne görüş alanından küçükse ortalanır; büyükse kenarlarda boşluk kalmayacak şekilde sınırlanır.
+            view.x = w <= vw ? (vw - w) / 2 : Math.min(0, Math.max(vw - w, view.x));
+            view.y = h <= vh ? (vh - h) / 2 : Math.min(0, Math.max(vh - h, view.y));
+        }
+        function fitView() {
+            var vp = viewportEl();
+            if (!vp.clientWidth || !natural.w) return;
+            var sc = Math.min(vp.clientWidth / natural.w, vp.clientHeight / natural.h);
+            view.baseW = natural.w * sc;
+            view.baseH = natural.h * sc;
+            view.s = 1;
+            clampView();
+            applyView();
+        }
+        function zoomAt(factor, cx, cy) {
+            var ns = Math.min(MAX_ZOOM, Math.max(1, view.s * factor));
+            var k = ns / view.s;
+            view.x = cx - (cx - view.x) * k;
+            view.y = cy - (cy - view.y) * k;
+            view.s = ns;
+            clampView();
+            applyView();
+        }
+        function zoomCenter(factor) { var vp = viewportEl(); zoomAt(factor, vp.clientWidth / 2, vp.clientHeight / 2); }
+        function wantsPan(e) { return tool() === 'pan' || spaceDown || e.button === 1; }
+        function bindZoom() {
+            var vp = viewportEl();
+            vp.addEventListener('wheel', function (e) {
+                e.preventDefault();
+                var r = vp.getBoundingClientRect();
+                zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top);
+            }, { passive: false });
+            vp.addEventListener('pointerdown', function (e) {
+                if (!wantsPan(e)) return;
+                e.preventDefault();
+                panDrag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+                vp.setPointerCapture(e.pointerId);
+                vp.classList.add('is-panning');
+            });
+            vp.addEventListener('pointermove', function (e) {
+                if (!panDrag) return;
+                view.x = panDrag.vx + e.clientX - panDrag.x;
+                view.y = panDrag.vy + e.clientY - panDrag.y;
+                clampView();
+                applyView();
+            });
+            var endPan = function () { panDrag = null; vp.classList.remove('is-panning'); };
+            vp.addEventListener('pointerup', endPan);
+            vp.addEventListener('pointercancel', endPan);
+            vp.addEventListener('auxclick', function (e) { if (e.button === 1) e.preventDefault(); });
+            q('[data-room-zoom-in]').addEventListener('click', function () { zoomCenter(1.4); });
+            q('[data-room-zoom-out]').addEventListener('click', function () { zoomCenter(1 / 1.4); });
+            q('[data-room-zoom-fit]').addEventListener('click', fitView);
+            // Boşluk tuşu basılıyken her araçta geçici kaydırma (metin kutularında devre dışı).
+            var keydown = function (e) {
+                if (e.code !== 'Space' || step !== 3 || e.target.closest('input, textarea, select, button')) return;
+                e.preventDefault();
+                if (!spaceDown) { spaceDown = true; vp.classList.add('is-space-pan'); }
+            };
+            var keyup = function (e) { if (e.code === 'Space') { spaceDown = false; vp.classList.remove('is-space-pan'); } };
+            document.addEventListener('keydown', keydown);
+            document.addEventListener('keyup', keyup);
+            window.addEventListener('resize', function () { if (step === 3) fitView(); });
+            el.addEventListener('shown.bs.modal', function () { if (step === 3) fitView(); });
+            el.addEventListener('hidden.bs.modal', function () {
+                document.removeEventListener('keydown', keydown);
+                document.removeEventListener('keyup', keyup);
+            });
         }
 
         function quadPoints() {
@@ -404,11 +503,13 @@
 
         function showMask(existingMaskUrl) {
             q('[data-room-auto]').addEventListener('click', function () { if (maskCtx) runAuto(); });
+            bindZoom();
             var img = q('[data-room-mask-img]');
             var canvas = q('[data-room-mask-canvas]');
             img.onload = function () {
                 canvas.width = natural.w;
                 canvas.height = natural.h;
+                fitView();
                 maskCtx = canvas.getContext('2d', { willReadFrequently: true });
                 // Yeni yüklemede eşyalar hemen otomatik bulunur; müşteri yalnızca kontrol edip düzeltir.
                 if (!existingMaskUrl) { runAuto(); return; }
@@ -438,7 +539,7 @@
                 dirty = true;
             }
             canvas.addEventListener('pointerdown', function (e) {
-                if (!maskCtx) return;
+                if (!maskCtx || wantsPan(e)) return; // kaydırmayı görüş alanı (viewport) yönetir
                 e.preventDefault();
                 var p = toImage(e);
                 if (tool() === 'poly') {
@@ -455,7 +556,7 @@
                 stroke(p, p);
             });
             canvas.addEventListener('pointermove', function (e) {
-                if (!maskCtx) return;
+                if (!maskCtx || panDrag) return;
                 var p = toImage(e);
                 if (tool() === 'poly') { if (poly.length) drawPolyPreview(p); return; }
                 if (!drawing) return;

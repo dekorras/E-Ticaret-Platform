@@ -136,7 +136,7 @@ public sealed class VisualizerCategoryCropMaskTests(StorefrontFixture fx)
 
             // Adım 3 açılır açılmaz koltuk otomatik bulunur (müşteri hiçbir şey çizmez).
             await Assertions.Expect(page.Locator("[data-room-auto-status]")).ToContainTextAsync("otomatik işaretlendi");
-            Directory.CreateDirectory(ScreenshotDir);
+        Directory.CreateDirectory(ScreenshotDir);
             await page.ScreenshotAsync(new() { Path = Path.Combine(ScreenshotDir, "koltuk-otomatik.png") });
             await page.Locator("[data-room-next]").ClickAsync();
             await page.WaitForFunctionAsync("() => !document.querySelector('[data-room-mask-canvas]') || !!document.querySelector('[data-room-error]:not([hidden])')");
@@ -188,6 +188,89 @@ public sealed class VisualizerCategoryCropMaskTests(StorefrontFixture fx)
     }
 
     [SkippableFact]
+    public async Task EsyaIsaretleme_TamEkran_DuzenlemedeOtomatikBulGorunur_YakinlastirVeKaydir()
+    {
+        Skip.IfNot(fx.IsAvailable, fx.UnavailableReason);
+        var (context, page) = await NewPageAsync();
+        await using var _ = context;
+        var (slug, _) = await fx.AnyProductAsync(context.APIRequest);
+        var photoPath = Path.Combine(Path.GetTempPath(), $"oda-zoom-{Guid.NewGuid():N}.jpg");
+        Directory.CreateDirectory(ScreenshotDir);
+        await File.WriteAllBytesAsync(photoPath, TestImages.RoomWithChairJpeg(1200, 800));
+        try
+        {
+            // Odayı işaretlemeden kaydet ("eşya yok, devam et").
+            await page.GotoAsync($"{fx.BaseUrl}/duvarinda-gor?product={slug}");
+            await page.Locator("[data-wall-visualizer][data-renderer]").WaitForAsync();
+            await page.Locator("[data-viz-upload-room]").ClickAsync();
+            await page.Locator("[data-room-file]").SetInputFilesAsync(photoPath);
+            await page.Locator("[data-room-next]").ClickAsync();
+            await page.Locator("[data-room-width]").FillAsync("400");
+            await page.Locator("[data-room-next]").ClickAsync();
+            await Assertions.Expect(page.Locator("[data-room-auto-status]")).ToContainTextAsync("otomatik işaretlendi");
+            await page.Locator("[data-room-skip]").ClickAsync();
+            await Assertions.Expect(page.Locator(".wall-viz-scene.is-active span")).ToHaveTextAsync("Odam");
+
+            // Sonradan düzenleme: pencere tam ekran; "Eşyaları otomatik bul" turuncu alanı GÖRÜNÜR biçimde çizer.
+            await page.Locator("[data-viz-edit-mask]").ClickAsync();
+            await Assertions.Expect(page.Locator(".modal.show .modal-fullscreen")).ToBeVisibleAsync();
+            var viewport = page.Locator("[data-room-viewport]");
+            var vpBox = (await viewport.BoundingBoxAsync())!;
+            Assert.True(vpBox.Height > 400, $"Görüş alanı ekranı kaplamıyor: {vpBox.Height}px");
+            await page.WaitForFunctionAsync("() => document.querySelector('[data-room-mask-canvas]').width > 0");
+            await page.Locator("[data-room-auto]").ClickAsync();
+            await Assertions.Expect(page.Locator("[data-room-auto-status]")).ToContainTextAsync("otomatik işaretlendi");
+            var orange = await page.EvaluateAsync<int>(@"() => {
+                const c = document.querySelector('[data-room-mask-canvas]'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+                let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 200) n++; return n; }");
+            Assert.True(orange > 1000, $"Turuncu işaret yok: {orange}");
+            var canvasBox = (await page.Locator("[data-room-mask-canvas]").BoundingBoxAsync())!;
+            Assert.True(canvasBox.Width > 300 && canvasBox.Height > 200, "Maske katmanı fotoğrafın üstünü kaplamıyor.");
+        Directory.CreateDirectory(ScreenshotDir);
+            await page.ScreenshotAsync(new() { Path = Path.Combine(ScreenshotDir, "isaretleme-tam-ekran.png") });
+
+            // Yakınlaştır (tekerlek) → etiket büyür; El aracıyla kaydır → sahne yer değiştirir.
+            await page.Mouse.MoveAsync(vpBox.X + vpBox.Width / 2, vpBox.Y + vpBox.Height / 2);
+            for (var i = 0; i < 5; i++) await page.Mouse.WheelAsync(0, -120);
+            var label = await page.Locator("[data-room-zoom-label]").TextContentAsync();
+            Assert.True(int.Parse(label!.TrimEnd('%')) > 150, $"Yakınlaşmadı: {label}");
+            await page.Locator("label[for=roomToolPan]").ClickAsync();
+            var before = await page.Locator("[data-room-mask-editor]").GetAttributeAsync("style");
+            await page.Mouse.MoveAsync(vpBox.X + vpBox.Width / 2, vpBox.Y + vpBox.Height / 2);
+            await page.Mouse.DownAsync();
+            await page.Mouse.MoveAsync(vpBox.X + vpBox.Width / 2 + 150, vpBox.Y + vpBox.Height / 2 + 80, new() { Steps = 5 });
+            await page.Mouse.UpAsync();
+            Assert.NotEqual(before, await page.Locator("[data-room-mask-editor]").GetAttributeAsync("style"));
+            await page.ScreenshotAsync(new() { Path = Path.Combine(ScreenshotDir, "isaretleme-yakinlastirma.png") });
+
+            // Yakınlaştırılmışken fırça fotoğrafta doğru yere boyar: ekran merkezindeki fotoğraf noktası işaretlenir.
+            await page.Locator("[data-room-clear]").ClickAsync();
+            await page.Locator("label[for=roomToolPaint]").ClickAsync();
+            var cx = vpBox.X + vpBox.Width / 2; var cy = vpBox.Y + vpBox.Height / 2;
+            await page.Mouse.ClickAsync(cx, cy);
+            // Tıklanan ekran noktasının fotoğraftaki karşılığı (yakınlaştırma/kaydırma dahil) boyanmış olmalı.
+            var alpha = await page.EvaluateAsync<int>(@"(p) => {
+                const c = document.querySelector('[data-room-mask-canvas]'); const r = c.getBoundingClientRect();
+                const x = Math.round((p.x - r.left) * c.width / r.width), y = Math.round((p.y - r.top) * c.height / r.height);
+                return c.getContext('2d').getImageData(x, y, 1, 1).data[3]; }", new { x = (double)cx, y = (double)cy });
+            Assert.Equal(255, alpha);
+            await page.Locator("[data-room-zoom-fit]").ClickAsync();
+            await Assertions.Expect(page.Locator("[data-room-zoom-label]")).ToHaveTextAsync("100%");
+        }
+        finally
+        {
+            File.Delete(photoPath);
+            var scenes = JsonDocument.Parse(await (await context.APIRequest.GetAsync($"{fx.BaseUrl}/api/v1/scenes")).TextAsync()).RootElement;
+            foreach (var s in scenes.EnumerateArray().Where(s => s.GetProperty("isUserScene").GetBoolean()))
+            {
+                var token = await page.Locator("input[name='__RequestVerificationToken']").First.GetAttributeAsync("value");
+                await context.APIRequest.DeleteAsync($"{fx.BaseUrl}/api/v1/room-previews/{s.GetProperty("id").GetString()}",
+                    new() { Headers = new Dictionary<string, string> { ["RequestVerificationToken"] = token ?? "" } });
+            }
+        }
+    }
+
+    [SkippableFact]
     public async Task KendiOdam_EsyaCevresiniCiz_MaskeTamOpak_SonradanDuzenlenebilir()
     {
         Skip.IfNot(fx.IsAvailable, fx.UnavailableReason);
@@ -215,7 +298,7 @@ public sealed class VisualizerCategoryCropMaskTests(StorefrontFixture fx)
             (float X, float Y) P(float fx, float fy) => (mb.X + mb.Width * fx, mb.Y + mb.Height * fy);
             foreach (var (x, y) in new[] { P(0.30f, 0.55f), P(0.60f, 0.55f), P(0.60f, 0.95f), P(0.30f, 0.95f), P(0.30f, 0.55f) })
                 await page.Mouse.ClickAsync(x, y);
-            Directory.CreateDirectory(ScreenshotDir);
+        Directory.CreateDirectory(ScreenshotDir);
             await page.ScreenshotAsync(new() { Path = Path.Combine(ScreenshotDir, "esya-isaretleme.png") });
             await page.Locator("[data-room-next]").ClickAsync();
             // Kaydedince pencere kapanır ve sayfa yeni odayla (etkin sahne) yeniden yüklenir; hata varsa pencerede görünür.
