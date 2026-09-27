@@ -2,6 +2,8 @@
 @using Dekorras.Domain.Ordering
 @model OrderDetailDto
 @{
+    Layout = "_AccountLayout";
+    ViewData["AccountNav"] = "orders";
     ViewData["Title"] = $"Sipariş {Model.OrderNumber}";
 
     static string StatusLabel(OrderStatus status) => status switch

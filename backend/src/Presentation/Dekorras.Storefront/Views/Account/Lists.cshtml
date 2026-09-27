@@ -1,0 +1,45 @@
+@model Dekorras.Application.WallCovering.TryOnListDto
+@{
+    Layout = "_AccountLayout";
+    ViewData["Title"] = "Tüm listelerim";
+    ViewData["AccountNav"] = "lists";
+    var wishlistCount = ViewBag.WishlistCount as int? ?? 0;
+}
+
+<h1 class="dk-acc-title h4 fw-bold mb-3">Tüm listelerim</h1>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <a class="card card-body shadow-sm d-block text-decoration-none text-body h-100" asp-action="Wishlist">
+            <div class="d-flex align-items-center gap-3">
+                <i class="bi bi-heart-fill fs-2 text-danger"></i>
+                <div>
+                    <div class="fw-bold">Beğendiklerim</div>
+                    <div class="small text-muted">@wishlistCount ürün</div>
+                </div>
+                <i class="bi bi-chevron-right ms-auto"></i>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6">
+        <a class="card card-body shadow-sm d-block text-decoration-none text-body h-100" href="/duvar-kagitlari">
+            <div class="d-flex align-items-center gap-3">
+                <i class="bi bi-image fs-2 text-primary"></i>
+                <div>
+                    <div class="fw-bold">Duvarımda Dene</div>
+                    <div class="small text-muted">@Model.Items.Count / @Model.MaxItems ürün · odanızda karşılaştırın</div>
+                </div>
+                <i class="bi bi-chevron-right ms-auto"></i>
+            </div>
+            @if (Model.Items.Count > 0)
+            {
+                <div class="d-flex gap-2 mt-3">
+                    @foreach (var i in Model.Items.Take(6))
+                    {
+                        <img src="@(i.Card.ThumbUrl ?? i.Card.ListUrl)" alt="@i.Card.Title" style="width:48px;height:48px;object-fit:cover" class="rounded border" loading="lazy" />
+                    }
+                </div>
+            }
+        </a>
+    </div>
+</div>

@@ -1,0 +1,41 @@
+@using Dekorras.Application.Customers.Queries
+@using System.Globalization
+@model IReadOnlyList<MyCouponUsageDto>
+@{
+    Layout = "_AccountLayout";
+    ViewData["Title"] = "Kuponlarım";
+    ViewData["AccountNav"] = "coupons";
+    var tr = CultureInfo.GetCultureInfo("tr-TR");
+}
+
+<h1 class="dk-acc-title h4 fw-bold mb-3">Kuponlarım</h1>
+
+<div class="card card-body shadow-sm mb-3">
+    <p class="mb-0"><i class="bi bi-ticket-perforated text-primary me-1"></i> Size iletilen kupon kodunu <a asp-controller="Cart" asp-action="Index">sepetinizde</a> "Kupon kodu" alanına yazarak kullanabilirsiniz. Geçerli kampanyalar için <a asp-action="Offers">Sana Özel Fırsatlar</a> sayfasına bakın.</p>
+</div>
+
+<section class="card card-body shadow-sm mb-3">
+    <h2 class="h6 fw-bold mb-3">Kullandığım kuponlar</h2>
+    @if (Model.Count == 0)
+    {
+        <p class="text-muted mb-0">Henüz bir kupon kullanmadınız.</p>
+    }
+    @foreach (var c in Model)
+    {
+        <div class="dk-acc-item d-flex gap-3 align-items-center py-3 border-top">
+            <span class="badge bg-light text-body border fs-6 font-monospace">@c.Code</span>
+            <div class="flex-grow-1">
+                <div class="small text-muted">Sipariş @c.OrderNumber · @c.UsedAtUtc.ToLocalTime().ToString("dd MMMM yyyy", tr)@(c.DiscountText is null ? "" : $" · {c.DiscountText}")</div>
+                <div>Kazancınız: <strong class="text-success">@c.DiscountTry.ToString("N2", tr) TL</strong></div>
+            </div>
+            @if (c.StillValid && c.ValidToUtc is { } until)
+            {
+                <span class="badge bg-success-subtle text-success">Son gün @until.ToLocalTime().ToString("dd.MM.yyyy")</span>
+            }
+            else
+            {
+                <span class="badge bg-light text-muted">Süresi doldu</span>
+            }
+        </div>
+    }
+</section>

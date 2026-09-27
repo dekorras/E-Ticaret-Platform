@@ -126,12 +126,17 @@
                             @if (User.Identity?.IsAuthenticated == true)
                             {
                                 <li><a class="dropdown-item" asp-controller="Account" asp-action="Orders">@Localizer["Siparişlerim"]</a></li>
-                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Wishlist">@Localizer["Favorilerim"]</a></li>
-                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Addresses">@Localizer["Adreslerim"]</a></li>
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Offers">@Localizer["Sana Özel Fırsatlar"]</a></li>
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Requests">@Localizer["Soru ve Taleplerim"]</a></li>
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Reviews">@Localizer["Değerlendirmelerim"]</a></li>
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Coupons">@Localizer["Kuponlarım"]</a></li>
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Profile">@Localizer["Kullanıcı bilgilerim"]</a></li>
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="Wishlist">@Localizer["Beğendiklerim"]</a></li>
+                                <li><a class="dropdown-item" asp-controller="Account" asp-action="CustomerService">@Localizer["Müşteri Hizmetleri"]</a></li>
                                 <li><hr class="dropdown-divider" /></li>
                                 <li>
                                     <form asp-controller="Account" asp-action="Logout" method="post">
-                                        <button type="submit" class="dropdown-item">@Localizer["Çıkış Yap"]</button>
+                                        <button type="submit" class="dropdown-item">@Localizer["Çıkış yap"]</button>
                                     </form>
                                 </li>
                             }

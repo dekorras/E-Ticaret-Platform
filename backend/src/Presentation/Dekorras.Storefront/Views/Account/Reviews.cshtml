@@ -1,0 +1,52 @@
+@using Dekorras.Application.Customers.Queries
+@using System.Globalization
+@model MyReviewsDto
+@{
+    Layout = "_AccountLayout";
+    ViewData["Title"] = "Değerlendirmelerim";
+    ViewData["AccountNav"] = "reviews";
+    var tr = CultureInfo.GetCultureInfo("tr-TR");
+}
+
+<h1 class="dk-acc-title h4 fw-bold mb-3">Değerlendirmelerim</h1>
+
+@if (Model.Pending.Count > 0)
+{
+    <section class="card card-body shadow-sm mb-3">
+        <h2 class="h6 fw-bold mb-3">Değerlendirme bekleyen ürünler (@Model.Pending.Count)</h2>
+        @foreach (var p in Model.Pending)
+        {
+            <div class="dk-acc-item d-flex gap-3 align-items-center py-3 border-top">
+                @if (p.ImageUrl != null) { <img src="@p.ImageUrl" alt="" loading="lazy" class="rounded border object-fit-cover flex-shrink-0" width="56" height="56" /> }
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">@p.ProductName</div>
+                    <div class="small text-muted">Sipariş tarihi: @p.OrderedAtUtc.ToLocalTime().ToString("dd MMMM yyyy", tr)</div>
+                </div>
+                <a class="btn btn-sm btn-primary" href="@Url.Action("Details", "Product", new { slug = p.ProductSlug })#reviews">Değerlendir</a>
+            </div>
+        }
+    </section>
+}
+
+<section class="card card-body shadow-sm mb-3">
+    <h2 class="h6 fw-bold mb-3">Yaptığım değerlendirmeler</h2>
+    @if (Model.Reviews.Count == 0)
+    {
+        <p class="text-muted mb-0">Henüz bir değerlendirmeniz yok. Tamamlanan siparişlerinizdeki ürünleri değerlendirerek diğer müşterilere yardımcı olabilirsiniz.</p>
+    }
+    @foreach (var r in Model.Reviews)
+    {
+        <div class="dk-acc-item d-flex gap-3 align-items-start py-3 border-top">
+            @if (r.ImageUrl != null) { <img src="@r.ImageUrl" alt="" loading="lazy" class="rounded border object-fit-cover flex-shrink-0" width="56" height="56" /> }
+            <div class="flex-grow-1">
+                <div class="small text-muted">
+                    @if (r.ProductSlug != null) { <a asp-controller="Product" asp-action="Details" asp-route-slug="@r.ProductSlug">@r.ProductName</a> } else { @r.ProductName }
+                    · @r.CreatedAtUtc.ToLocalTime().ToString("dd MMMM yyyy", tr)
+                </div>
+                <div class="dk-acc-stars text-warning" aria-label="@r.Rating / 5 puan">@(new string('★', r.Rating))@(new string('☆', 5 - r.Rating))</div>
+                <div>@r.Comment</div>
+                @if (!r.IsApproved) { <span class="badge bg-warning-subtle text-warning-emphasis mt-1">Onay bekliyor</span> }
+            </div>
+        </div>
+    }
+</section>

@@ -1,54 +1,139 @@
-@using Dekorras.Application.Ordering.Storefront
+@using Dekorras.Application.Customers.Queries
 @using Dekorras.Domain.Ordering
-@model IReadOnlyCollection<MyOrderListItemDto>
+@using System.Globalization
+@model MyOrdersPageDto
 @{
+    Layout = "_AccountLayout";
     ViewData["Title"] = "Siparişlerim";
+    ViewData["AccountNav"] = "orders";
+    var tr = CultureInfo.GetCultureInfo("tr-TR");
+    var filter = (MyOrderFilter)(ViewBag.Filter ?? MyOrderFilter.All);
+    var search = ViewBag.Search as string;
+    var period = ViewBag.Period as string;
 
-    static string StatusLabel(OrderStatus status) => status switch
+    static (string Label, string Css, string Icon) Status(OrderStatus s) => s switch
     {
-        OrderStatus.PendingApproval => "Onay Bekliyor",
-        OrderStatus.Preparing => "Hazırlanıyor",
-        OrderStatus.Prepared => "Hazırlandı",
-        OrderStatus.Shipped => "Kargoya Verildi",
-        OrderStatus.Completed => "Tamamlandı",
-        OrderStatus.Cancelled => "İptal Edildi",
-        OrderStatus.Refunded => "İade Edildi",
-        _ => status.ToString()
+        OrderStatus.Completed => ("Sipariş tamamlandı", "text-success", "bi-check-circle-fill"),
+        OrderStatus.Shipped => ("Kargoya verildi", "text-warning", "bi-truck"),
+        OrderStatus.Prepared => ("Kargoya hazırlanıyor", "text-warning", "bi-box-seam"),
+        OrderStatus.Preparing => ("Hazırlanıyor", "text-warning", "bi-hourglass-split"),
+        OrderStatus.PendingApproval => ("Onay bekliyor", "text-warning", "bi-clock"),
+        OrderStatus.CancellationReverted => ("İptal geri alındı", "text-warning", "bi-arrow-counterclockwise"),
+        OrderStatus.Cancelled => ("İptal edildi", "text-danger", "bi-x-circle-fill"),
+        OrderStatus.Refunded => ("İade edildi", "text-info", "bi-arrow-return-left"),
+        OrderStatus.Chargeback => ("Ters ibraz", "text-info", "bi-arrow-return-left"),
+        OrderStatus.Rejected => ("Teslim edilemedi", "text-danger", "bi-exclamation-circle-fill"),
+        OrderStatus.Expired => ("Süresi doldu", "text-danger", "bi-exclamation-circle-fill"),
+        OrderStatus.Failed => ("Ödeme alınamadı", "text-danger", "bi-exclamation-circle-fill"),
+        OrderStatus.OnHold => ("Beklemede", "text-warning", "bi-pause-circle"),
+        OrderStatus.Voided => ("İptal edildi", "text-danger", "bi-x-circle-fill"),
+        _ => (s.ToString(), "", "bi-circle")
     };
+
+    (MyOrderFilter Filter, string Label)[] filters =
+    [
+        (MyOrderFilter.All, "Tümü"), (MyOrderFilter.Ongoing, "Devam edenler"), (MyOrderFilter.Cancelled, "İptaller"),
+        (MyOrderFilter.Returned, "İadeler"), (MyOrderFilter.Undelivered, "Teslim edilemeyenler")
+    ];
+    string FilterUrl(MyOrderFilter f) => Url.Action("Orders", new { filter = f == MyOrderFilter.All ? (MyOrderFilter?)null : f, q = search, period })!;
 }
 
-<h1 class="h3 mb-3">Siparişlerim</h1>
+<h1 class="dk-acc-title h4 fw-bold mb-3">Siparişlerim</h1>
 
-@if (Model.Count == 0)
-{
-    <p class="text-muted">Henüz bir siparişiniz yok.</p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Sipariş No</th>
-                <th>Tarih</th>
-                <th>Tutar</th>
-                <th>Durum</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var order in Model)
+<form method="get" asp-action="Orders" class="row g-2 align-items-center mb-3" data-order-filters>
+    @if (filter != MyOrderFilter.All) { <input type="hidden" name="filter" value="@filter" /> }
+    <div class="col-12 col-md-4 col-xl-3">
+        <div class="input-group input-group-sm">
+            <span class="input-group-text bg-body"><i class="bi bi-search" aria-hidden="true"></i></span>
+            <input type="search" name="q" value="@search" class="form-control border-start-0" placeholder="Siparişlerimde ara" aria-label="Siparişlerimde ara" />
+        </div>
+    </div>
+    <div class="col-12 col-md">
+        <div class="d-flex flex-wrap gap-2" role="group" aria-label="Sipariş durumu">
+            @foreach (var (f, label) in filters)
             {
-                <tr>
-                    <td>@order.OrderNumber</td>
-                    <td>@order.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
-                    @* Geçmiş siparişler bilinçli olarak HER ZAMAN TL gösterir, seçili görüntüleme para birimine
-                       çevrilmez - GERÇEKTEN tahsil edilen tutar budur, o günkü kurla değil BUGÜNKÜ kurla
-                       "yaklaşık" bir tutar göstermek yanıltıcı olurdu (bkz. Checkout'taki dönüşüm notu). *@
-                    <td>@order.GrandTotalTry.ToString("N2") ₺</td>
-                    <td>@StatusLabel(order.Status)</td>
-                    <td><a class="btn btn-sm btn-outline-primary" asp-action="OrderDetail" asp-route-id="@order.Id">Detay</a></td>
-                </tr>
+                <a class="btn btn-sm @(filter == f ? "btn-primary" : "btn-outline-secondary")" href="@FilterUrl(f)" aria-current="@(filter == f ? "true" : null)">@label</a>
             }
-        </tbody>
-    </table>
+        </div>
+    </div>
+    <div class="col-12 col-md-auto">
+        <select name="period" class="form-select form-select-sm" aria-label="Dönem" onchange="this.form.submit()">
+            <option value="" selected="@(string.IsNullOrEmpty(period))">Tüm siparişler</option>
+            <option value="30" selected="@(period == "30")">Son 1 ay</option>
+            <option value="90" selected="@(period == "90")">Son 3 ay</option>
+            <option value="180" selected="@(period == "180")">Son 6 ay</option>
+            @foreach (var y in Model.Years)
+            {
+                <option value="@y" selected="@(period == y.ToString())">@y</option>
+            }
+        </select>
+        <noscript><button type="submit" class="btn btn-sm btn-outline-secondary mt-1">Uygula</button></noscript>
+    </div>
+</form>
+
+@if (Model.Orders.Count == 0)
+{
+    <div class="card text-center text-body-secondary">
+        <div class="card-body py-5">
+            <i class="bi bi-box-seam fs-1 d-block mb-2" aria-hidden="true"></i>
+            <p class="mb-0">@(Model.TotalOrderCount == 0 ? "Henüz bir siparişiniz yok." : "Bu seçime uyan sipariş bulunamadı.")</p>
+            @if (Model.TotalOrderCount == 0) { <a class="btn btn-primary mt-3" href="/">Alışverişe başla</a> }
+        </div>
+    </div>
+}
+
+@foreach (var o in Model.Orders)
+{
+    var st = Status(o.Status);
+    var thumbs = o.Items.Where(i => i.ImageUrl != null).Take(3).ToList();
+    var bodyId = "order-" + o.Id.ToString("N");
+    <article class="card mb-3 shadow-sm dk-order" data-order>
+        <div class="card-header bg-body border-0 py-3" role="button" tabindex="0" data-bs-toggle="collapse" data-bs-target="#@bodyId"
+             aria-expanded="false" aria-controls="@bodyId" data-order-toggle>
+            <div class="row g-2 align-items-center">
+                <div class="col-auto d-flex gap-1">
+                    @foreach (var t in thumbs) { <img src="@t.ImageUrl" alt="@t.ProductName" loading="lazy" class="rounded border object-fit-cover" width="44" height="44" /> }
+                    @if (o.Items.Count > thumbs.Count && thumbs.Count > 0) { <span class="rounded border bg-body-tertiary small text-body-secondary d-inline-flex align-items-center justify-content-center" style="width:44px;height:44px">+@(o.Items.Count - thumbs.Count)</span> }
+                    @if (thumbs.Count == 0) { <span class="rounded border bg-body-tertiary text-body-secondary d-inline-flex align-items-center justify-content-center" style="width:44px;height:44px"><i class="bi bi-image"></i></span> }
+                </div>
+                <div class="col-auto ms-auto order-md-last"><i class="bi bi-chevron-down dk-order-toggle" aria-hidden="true"></i></div>
+                <div class="col-12 col-md small text-body-secondary">Sipariş no: <strong class="text-body fs-6 ms-1">@o.OrderNumber</strong></div>
+                <div class="col-6 col-md-3 small fw-semibold"><i class="bi @st.Icon @st.Css me-1" aria-hidden="true"></i>@st.Label</div>
+                <div class="col-6 col-md-auto text-end small fw-semibold">
+                    <div>@o.CreatedAtUtc.ToLocalTime().ToString("dd MMMM yyyy", tr)</div>
+                    <div class="text-success">@o.GrandTotalTry.ToString("N2", tr) TL</div>
+                </div>
+            </div>
+        </div>
+        <div class="collapse" id="@bodyId">
+            <ul class="list-group list-group-flush border-top">
+                @foreach (var i in o.Items)
+                {
+                    <li class="list-group-item d-flex align-items-center gap-3 py-2">
+                        @if (i.ImageUrl != null) { <img src="@i.ImageUrl" alt="" loading="lazy" class="rounded border object-fit-cover flex-shrink-0" width="56" height="56" /> }
+                        <div class="flex-grow-1">
+                            @if (i.Slug != null) { <a asp-controller="Product" asp-action="Details" asp-route-slug="@i.Slug">@i.ProductName</a> } else { @i.ProductName }
+                            <div class="small text-body-secondary">@i.Quantity adet</div>
+                        </div>
+                        <div class="fw-semibold text-nowrap">@i.LineTotalTry.ToString("N2", tr) TL</div>
+                    </li>
+                }
+            </ul>
+            <div class="card-footer bg-body d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                <span class="small text-body-secondary">@(o.ShipmentTrackingNumber is null ? "" : $"Kargo takip no: {o.ShipmentTrackingNumber}")</span>
+                <a class="btn btn-sm btn-outline-primary" asp-action="OrderDetail" asp-route-id="@o.Id">Sipariş detayı</a>
+            </div>
+        </div>
+    </article>
+}
+
+@section Scripts {
+    <script>
+        // Kart başlığı bir <div>; Bootstrap collapse yalnızca tıklamayı dinler, klavye (Enter/Boşluk) de açsın.
+        document.querySelectorAll('[data-order-toggle]').forEach(function (head) {
+            head.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); head.click(); }
+            });
+        });
+    </script>
 }

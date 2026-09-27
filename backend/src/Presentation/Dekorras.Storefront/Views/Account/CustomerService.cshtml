@@ -1,0 +1,48 @@
+@using Dekorras.Application.Common
+@model IDictionary<string, string>
+@{
+    Layout = "_AccountLayout";
+    ViewData["Title"] = "Müşteri Hizmetleri";
+    ViewData["AccountNav"] = "support";
+    string? Get(string key) => Model.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v : null;
+    var phone = Get(ContactSettingKeys.PhoneNumber);
+    var whatsApp = Get(ContactSettingKeys.WhatsAppUrl);
+    var instagram = Get(ContactSettingKeys.InstagramUrl);
+    var telegram = Get(ContactSettingKeys.TelegramUrl);
+}
+
+<h1 class="dk-acc-title h4 fw-bold mb-3">Müşteri Hizmetleri</h1>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card card-body shadow-sm h-100">
+            <h2 class="h6 fw-bold mb-3">Bize ulaşın</h2>
+            @if (phone is not null)
+            {
+                <a class="d-flex align-items-center gap-2 mb-2 text-decoration-none" href="tel:@phone"><i class="bi bi-telephone fs-5"></i> @phone</a>
+            }
+            @if (whatsApp is not null)
+            {
+                <a class="d-flex align-items-center gap-2 mb-2 text-decoration-none" href="@whatsApp" target="_blank" rel="noopener"><i class="bi bi-whatsapp fs-5 text-success"></i> WhatsApp'tan yazın</a>
+            }
+            @if (instagram is not null)
+            {
+                <a class="d-flex align-items-center gap-2 mb-2 text-decoration-none" href="@instagram" target="_blank" rel="noopener"><i class="bi bi-instagram fs-5"></i> Instagram</a>
+            }
+            @if (telegram is not null)
+            {
+                <a class="d-flex align-items-center gap-2 mb-2 text-decoration-none" href="@telegram" target="_blank" rel="noopener"><i class="bi bi-telegram fs-5"></i> Telegram</a>
+            }
+            <a class="d-flex align-items-center gap-2 text-decoration-none" asp-controller="Cms" asp-action="Page" asp-route-slug="iletisim"><i class="bi bi-envelope fs-5"></i> İletişim sayfası</a>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-body shadow-sm h-100">
+            <h2 class="h6 fw-bold mb-3">Siparişinizle ilgili</h2>
+            <a class="d-flex align-items-center gap-2 mb-2 text-decoration-none" asp-action="Orders"><i class="bi bi-box-seam fs-5"></i> Sipariş durumunu görüntüle</a>
+            <a class="d-flex align-items-center gap-2 mb-2 text-decoration-none" asp-action="Orders" asp-route-filter="Returned"><i class="bi bi-arrow-return-left fs-5"></i> İadelerim</a>
+            <a class="d-flex align-items-center gap-2 mb-2 text-decoration-none" asp-action="Requests"><i class="bi bi-chat-square-text fs-5"></i> Soru ve taleplerim</a>
+            <div class="small text-muted mt-2">Ölçüye özel üretilen duvar kağıdı ve posterlerde baskı onayı e-postanızdaki bağlantıdan verilir.</div>
+        </div>
+    </div>
+</div>

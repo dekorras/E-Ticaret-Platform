@@ -1,0 +1,17 @@
+/* "Hesabım" alanı: düzen tamamen Bootstrap sınıflarıyla kurulur; bu dosya yalnızca küçük rötuşlar içerir
+   (yüklenmese de sayfalar düzgün görünür). */
+
+/* Sol menü: list-group öğelerinde gri hover yerine marka rengi */
+.dk-acc-link { color: var(--bs-body-color); }
+.dk-acc-link .bi { width: 1.5rem; text-align: center; color: var(--bs-secondary-color); }
+.dk-acc-link:hover, .dk-acc-link:focus { background: var(--bs-primary-bg-subtle); color: var(--bs-primary); }
+.dk-acc-link.is-active, .dk-acc-link.is-active .bi { color: var(--bs-primary); }
+.dk-acc-promo:hover { filter: brightness(.97); }
+
+/* Kart içindeki listelerde ilk satırın üst çizgisi olmasın */
+.card-body > h2 + .dk-acc-item { border-top: 0 !important; }
+
+/* Sipariş kartı: açılınca ok yukarı döner */
+.dk-order .card-header { cursor: pointer; }
+.dk-order-toggle { display: inline-block; transition: transform .15s; }
+.dk-order [aria-expanded="true"] .dk-order-toggle { transform: rotate(180deg); }

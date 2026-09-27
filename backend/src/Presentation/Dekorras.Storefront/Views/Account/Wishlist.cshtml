@@ -1,39 +1,22 @@
 @using Dekorras.Application.Customers.Queries
 @model IReadOnlyCollection<WishlistItemDto>
 @{
-    ViewData["Title"] = "Favorilerim";
-    var newsletterSubscribed = ViewBag.NewsletterSubscribed as bool? ?? false;
+    Layout = "_AccountLayout";
+    ViewData["Title"] = "Beğendiklerim";
+    ViewData["AccountNav"] = "wishlist";
 }
 
-<h1 class="h3 mb-3">Favorilerim</h1>
+<h1 class="dk-acc-title h4 fw-bold mb-3">Beğendiklerim</h1>
 
-<div class="card mb-4" style="max-width: 500px;">
-    <div class="card-body">
-        <h5 class="card-title">Bülten Aboneliği</h5>
-        <form asp-controller="Account" asp-action="SetNewsletterSubscription" method="post" class="d-flex align-items-center gap-2">
-            <input type="hidden" name="subscribed" value="@(!newsletterSubscribed)" />
-            @if (newsletterSubscribed)
-            {
-                <span class="badge bg-success">Abonesiniz</span>
-                <button type="submit" class="btn btn-sm btn-outline-secondary">Abonelikten Çık</button>
-            }
-            else
-            {
-                <span class="badge bg-secondary">Abone Değilsiniz</span>
-                <button type="submit" class="btn btn-sm btn-outline-primary">Bültene Abone Ol</button>
-            }
-        </form>
-    </div>
-</div>
 
 @if (Model.Count == 0)
 {
-    <p class="text-muted">Favori listeniz boş.</p>
+    <p class="text-muted">Beğendiğiniz ürün yok. Ürün sayfalarındaki kalp simgesiyle ürünleri bu listeye ekleyebilirsiniz.</p>
     <a class="btn btn-primary" asp-controller="Home" asp-action="Index">Alışverişe Devam Et</a>
 }
 else
 {
-    <div class="row row-cols-1 row-cols-md-4 g-4">
+    <div class="row row-cols-2 row-cols-md-3 g-3">
         @foreach (var item in Model)
         {
             <div class="col">

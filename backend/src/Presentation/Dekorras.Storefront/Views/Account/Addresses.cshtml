@@ -1,6 +1,8 @@
 @using Dekorras.Application.Customers.Queries
 @model IReadOnlyCollection<CustomerAddressDto>
 @{
+    Layout = "_AccountLayout";
+    ViewData["AccountNav"] = "profile";
     ViewData["Title"] = "Adreslerim";
 }
 

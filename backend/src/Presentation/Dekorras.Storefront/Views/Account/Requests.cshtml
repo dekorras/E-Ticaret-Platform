@@ -1,0 +1,87 @@
+@using Dekorras.Application.Customers.Queries
+@using Dekorras.Domain.WallCovering
+@using System.Globalization
+@model MyRequestsDto
+@{
+    Layout = "_AccountLayout";
+    ViewData["Title"] = "Soru ve Taleplerim";
+    ViewData["AccountNav"] = "requests";
+    var tr = CultureInfo.GetCultureInfo("tr-TR");
+
+    static string TypeLabel(DesignRequestType t) => t switch
+    {
+        DesignRequestType.OzelOlcu => "Özel ölçü",
+        DesignRequestType.RenkDegisikligi => "Renk değişikliği",
+        DesignRequestType.GorselDuzenlemeKirpma => "Görsel düzenleme / kırpma",
+        DesignRequestType.OgeEkleKaldir => "Öğe ekle / kaldır",
+        _ => "Diğer"
+    };
+    static (string Label, string Css) StatusLabel(DesignRequestStatus s) => s switch
+    {
+        DesignRequestStatus.New => ("Alındı", "bg-secondary-subtle text-secondary"),
+        DesignRequestStatus.InProgress => ("İnceleniyor", "bg-warning-subtle text-warning-emphasis"),
+        DesignRequestStatus.Answered => ("Yanıtlandı", "bg-success-subtle text-success"),
+        _ => ("Kapandı", "bg-light text-muted")
+    };
+}
+
+<h1 class="dk-acc-title h4 fw-bold mb-3">Soru ve Taleplerim</h1>
+
+<section class="card card-body shadow-sm mb-3">
+    <h2 class="h6 fw-bold mb-3">Ürün sorularım</h2>
+    @if (Model.Questions.Count == 0)
+    {
+        <p class="text-muted mb-0">Henüz bir ürün hakkında soru sormadınız. Ürün sayfalarındaki "Soru sor" bölümünden satıcıya soru iletebilirsiniz.</p>
+    }
+    @foreach (var q in Model.Questions)
+    {
+        <div class="dk-acc-item d-flex gap-3 align-items-start py-3 border-top">
+            <i class="bi bi-chat-square-text fs-4 text-muted"></i>
+            <div class="flex-grow-1">
+                <div class="small text-muted">
+                    @if (q.ProductSlug != null) { <a asp-controller="Product" asp-action="Details" asp-route-slug="@q.ProductSlug">@q.ProductName</a> } else { @q.ProductName }
+                    · @q.CreatedAtUtc.ToLocalTime().ToString("dd MMMM yyyy", tr)
+                </div>
+                <div class="fw-semibold">@q.Question</div>
+                @if (q.Answer is null)
+                {
+                    <span class="badge bg-warning-subtle text-warning-emphasis mt-1">Yanıt bekleniyor</span>
+                }
+                else
+                {
+                    <div class="mt-1 p-2 bg-light rounded small"><strong>Dekorras:</strong> @q.Answer</div>
+                }
+            </div>
+        </div>
+    }
+</section>
+
+<section class="card card-body shadow-sm mb-3">
+    <h2 class="h6 fw-bold mb-3">Tasarım değişikliği taleplerim</h2>
+    @if (Model.DesignRequests.Count == 0)
+    {
+        <p class="text-muted mb-0">Henüz bir tasarım talebiniz yok. Duvar kağıdı ve poster sayfalarındaki "Tasarım değişikliği iste" düğmesiyle özel ölçü, renk veya düzenleme talebi gönderebilirsiniz.</p>
+    }
+    @foreach (var r in Model.DesignRequests)
+    {
+        var st = StatusLabel(r.Status);
+        <div class="dk-acc-item d-flex gap-3 align-items-start py-3 border-top">
+            <i class="bi bi-palette fs-4 text-muted"></i>
+            <div class="flex-grow-1">
+                <div class="small text-muted">
+                    @TypeLabel(r.RequestType)
+                    @if (r.ProductSlug != null) { <span>· <a asp-controller="Product" asp-action="Details" asp-route-slug="@r.ProductSlug">@r.ProductName</a></span> }
+                    · @r.CreatedAtUtc.ToLocalTime().ToString("dd MMMM yyyy", tr)
+                </div>
+                <div>@r.Message</div>
+                <span class="badge @st.Css mt-1">@st.Label</span>
+                @if (r.RespondedAtUtc is null && r.Status is DesignRequestStatus.New or DesignRequestStatus.InProgress)
+                {
+                    <span class="small text-muted ms-1">En geç @r.DueAtUtc.ToLocalTime().ToString("dd MMMM HH:mm", tr) içinde e-postayla yanıtlanır.</span>
+                }
+            </div>
+        </div>
+    }
+</section>
+
+<p class="small text-muted">Başka bir konuda yardım mı gerekiyor? <a asp-action="CustomerService">Müşteri Hizmetleri</a></p>

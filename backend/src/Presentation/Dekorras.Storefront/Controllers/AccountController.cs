@@ -110,11 +110,109 @@ public class AccountController(UserManager<IdentityUser> userManager, SignInMana
     }
 
     [Authorize]
-    public async Task<IActionResult> Orders()
+    public IActionResult Index() => RedirectToAction(nameof(Orders));
+
+    /// <summary>Siparişlerim: arama (sipariş no / ürün adı), durum filtresi (Tümü, Devam edenler, İptaller, İadeler,
+    /// Teslim edilemeyenler) ve dönem (Tüm siparişler / son 30-90-180 gün / yıl).</summary>
+    [Authorize]
+    public async Task<IActionResult> Orders(string? q, MyOrderFilter filter = MyOrderFilter.All, string? period = null)
     {
         var identityUserId = userManager.GetUserId(User)!;
-        var orders = await sender.Send(new GetMyOrdersQuery(identityUserId));
-        return View(orders);
+        var page = await sender.Send(new GetMyOrdersPageQuery(identityUserId, q, filter, period));
+        ViewBag.Search = q;
+        ViewBag.Filter = filter;
+        ViewBag.Period = period;
+        return View(page);
+    }
+
+    [Authorize]
+    public async Task<IActionResult> Offers() =>
+        View(await sender.Send(new GetMyOffersQuery(userManager.GetUserId(User)!)));
+
+    [Authorize]
+    public async Task<IActionResult> Requests() =>
+        View(await sender.Send(new GetMyRequestsQuery(userManager.GetUserId(User)!)));
+
+    [Authorize]
+    public async Task<IActionResult> Reviews() =>
+        View(await sender.Send(new GetMyReviewsQuery(userManager.GetUserId(User)!)));
+
+    [Authorize]
+    public async Task<IActionResult> Coupons() =>
+        View(await sender.Send(new GetMyCouponsQuery(userManager.GetUserId(User)!)));
+
+    /// <summary>Kullanıcı bilgilerim: ad-soyad/telefon, şifre değiştirme, bülten; adresler de bu başlığın altında.</summary>
+    [Authorize]
+    public async Task<IActionResult> Profile()
+    {
+        var profile = await sender.Send(new GetMyCustomerProfileQuery(userManager.GetUserId(User)!));
+        return View(new ProfileFormModel
+        {
+            FullName = profile?.FullName ?? "",
+            Email = profile?.Email ?? User.Identity?.Name ?? "",
+            PhoneNumber = profile?.PhoneNumber,
+            NewsletterSubscribed = profile?.NewsletterSubscribed ?? false
+        });
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Profile(ProfileFormModel model)
+    {
+        ModelState.Remove(nameof(ProfileFormModel.Email));
+        if (!ModelState.IsValid) return View(model);
+        try
+        {
+            await sender.Send(new UpdateMyContactCommand(userManager.GetUserId(User)!, model.FullName, model.PhoneNumber));
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            foreach (var e in ex.Errors) ModelState.AddModelError(e.PropertyName, e.ErrorMessage);
+            return View(model);
+        }
+        TempData["ProfileMessage"] = "Bilgileriniz güncellendi.";
+        return RedirectToAction(nameof(Profile));
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangePassword(string currentPassword, string newPassword, string confirmPassword)
+    {
+        var user = await userManager.GetUserAsync(User);
+        if (user is null) return Challenge();
+        if (string.IsNullOrEmpty(newPassword) || newPassword != confirmPassword)
+        {
+            TempData["PasswordError"] = "Yeni şifre ile tekrarı aynı olmalıdır.";
+            return RedirectToAction(nameof(Profile));
+        }
+        var result = await userManager.ChangePasswordAsync(user, currentPassword ?? "", newPassword);
+        if (!result.Succeeded)
+        {
+            TempData["PasswordError"] = string.Join(" ", result.Errors.Select(e => e.Code == "PasswordMismatch" ? "Mevcut şifre hatalı." : e.Description));
+            return RedirectToAction(nameof(Profile));
+        }
+        await signInManager.RefreshSignInAsync(user);
+        TempData["PasswordMessage"] = "Şifreniz değiştirildi.";
+        return RedirectToAction(nameof(Profile));
+    }
+
+    /// <summary>Tüm listelerim: Beğendiklerim + "Duvarımda Dene" listesi.</summary>
+    [Authorize]
+    public async Task<IActionResult> Lists()
+    {
+        var identityUserId = userManager.GetUserId(User)!;
+        ViewBag.WishlistCount = (await sender.Send(new GetMyWishlistQuery(identityUserId, StorefrontLanguage.GetLanguage(HttpContext)))).Count;
+        var tryOn = await sender.Send(new Dekorras.Application.WallCovering.GetTryOnListQuery(await WallVisitor.GetOwnerKeyAsync(HttpContext, sender)));
+        return View(tryOn);
+    }
+
+    [Authorize]
+    public async Task<IActionResult> CustomerService()
+    {
+        var settings = await sender.Send(new Dekorras.Application.SystemAdmin.Queries.GetSettingsQuery(Dekorras.Application.Common.ContactSettingKeys.All));
+        return View(settings.ToDictionary(s => s.Key, s => s.Value));
     }
 
     [Authorize]
@@ -179,7 +277,8 @@ public class AccountController(UserManager<IdentityUser> userManager, SignInMana
     {
         var identityUserId = userManager.GetUserId(User)!;
         await sender.Send(new SetNewsletterSubscriptionCommand(identityUserId, subscribed));
-        return RedirectToAction(nameof(Wishlist));
+        TempData["ProfileMessage"] = subscribed ? "Bülten aboneliğiniz açıldı." : "Bülten aboneliğiniz kapatıldı.";
+        return RedirectToAction(nameof(Profile));
     }
 
     [Authorize]

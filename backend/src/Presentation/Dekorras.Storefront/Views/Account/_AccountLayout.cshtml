@@ -1,0 +1,22 @@
+@* "Hesabım" alanının ortak düzeni: solda menü (AccountSidebar), sağda sayfa içeriği. Sayfalar
+   ViewData["AccountNav"] ile etkin menü başlığını belirtir. *@
+@{
+    Layout = "_Layout";
+}
+@section Styles {
+    <link rel="stylesheet" href="~/css/account.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+}
+
+<div class="dk-acc row g-4 py-3">
+    <div class="col-lg-3">
+        @await Component.InvokeAsync("AccountSidebar", new { active = ViewData["AccountNav"] as string ?? "" })
+    </div>
+    <div class="col-lg-9">
+        @RenderBody()
+    </div>
+</div>
+
+@section Scripts {
+    @await RenderSectionAsync("Scripts", required: false)
+}

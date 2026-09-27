@@ -4,6 +4,12 @@
     --dk-color-primary: #E96631;
     --dk-color-primary-dark: #DD4B0F;
     --dk-color-primary-rgb: 233, 102, 49;
+    /* Bootstrap "primary" = marka turuncusu: text-primary, bg-primary-subtle, border-primary vb. yardımcı sınıflar da uyumlu olur. */
+    --bs-primary: #E96631;
+    --bs-primary-rgb: 233, 102, 49;
+    --bs-primary-text-emphasis: #8c3a19;
+    --bs-primary-bg-subtle: #fbe0d6;
+    --bs-primary-border-subtle: #f6c2ad;
     --dk-color-text: #333333;
     --dk-color-muted: #767676;
     --dk-color-border: #e5e5e5;

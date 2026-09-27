@@ -1,0 +1,54 @@
+@using Dekorras.Application.Customers.Queries
+@using Dekorras.Domain.Ordering
+@using System.Globalization
+@model MyOffersDto
+@{
+    Layout = "_AccountLayout";
+    ViewData["Title"] = "Sana Özel Fırsatlar";
+    ViewData["AccountNav"] = "offers";
+    var tr = CultureInfo.GetCultureInfo("tr-TR");
+}
+
+<h1 class="dk-acc-title h4 fw-bold mb-3">Sana Özel Fırsatlar</h1>
+
+<section class="card card-body shadow-sm mb-3">
+    <h2 class="h6 fw-bold mb-3">Geçerli kampanyalar</h2>
+    @if (Model.Campaigns.Count == 0)
+    {
+        <p class="text-muted mb-0">Şu an geçerli bir kampanya yok. Yeni fırsatlardan haberdar olmak için <a asp-action="Profile">bülten aboneliğinizi</a> açabilirsiniz.</p>
+    }
+    @foreach (var c in Model.Campaigns)
+    {
+        <div class="dk-acc-item d-flex gap-3 align-items-start py-3 border-top">
+            <i class="bi bi-gem fs-3 text-primary"></i>
+            <div class="flex-grow-1">
+                <div class="fw-semibold">@c.Name</div>
+                <div class="small text-muted">Son gün: @c.EndsAtUtc.ToLocalTime().ToString("dd MMMM yyyy", tr) · Sepette otomatik uygulanır</div>
+            </div>
+            <span class="badge bg-success-subtle text-success fs-6">@(c.DiscountType == DiscountType.Percentage ? $"%{c.DiscountValue:0.##}" : $"{c.DiscountValue.ToString("N2", tr)} TL") indirim</span>
+        </div>
+    }
+</section>
+
+<section class="card card-body shadow-sm mb-3">
+    <h2 class="h6 fw-bold mb-3">@(Model.CustomerGroupName is null ? "Size özel fiyatlar" : $"{Model.CustomerGroupName} müşterilerine özel fiyatlar")</h2>
+    @if (Model.GroupPrices.Count == 0)
+    {
+        <p class="text-muted mb-0">Müşteri grubunuza tanımlı özel fiyatlı ürün şu an yok.</p>
+    }
+    else
+    {
+        <div class="row row-cols-2 row-cols-md-3 g-3">
+            @foreach (var p in Model.GroupPrices)
+            {
+                <div class="col">
+                    <a class="d-block text-decoration-none text-body" asp-controller="Product" asp-action="Details" asp-route-slug="@p.ProductSlug">
+                        @if (p.ImageUrl != null) { <img src="@p.ImageUrl" alt="" class="img-fluid rounded mb-1" loading="lazy" /> }
+                        <div class="small">@p.ProductName</div>
+                        <div><span class="text-muted text-decoration-line-through small">@p.BasePriceTry.ToString("N2", tr) TL</span> <strong class="text-success">@p.GroupPriceTry.ToString("N2", tr) TL</strong></div>
+                    </a>
+                </div>
+            }
+        </div>
+    }
+</section>
