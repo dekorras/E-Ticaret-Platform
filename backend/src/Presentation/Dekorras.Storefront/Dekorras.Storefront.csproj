@@ -16,6 +16,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Yüklenen dosyalar (wwwroot/uploads, ~1 GB) ve özel dosyalar (App_Data) çalışma zamanı verisidir: derlemenin statik
+         varlık listesine ve yayın (publish) çıktısına GİRMEZ; UseStaticFiles "/uploads" altında doğrudan klasörden sunar. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);wwwroot\uploads\**;App_Data\**</DefaultItemExcludes>
   </PropertyGroup>
 
 </Project>

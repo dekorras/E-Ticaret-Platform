@@ -16,8 +16,8 @@ public sealed class LocalFileStorage(string rootPath) : IFileStorage
     /// - `app.UseStaticFiles` burayı `/uploads` altında sunmalıdır). Production'da bunun yerine
     /// gerçek bir Blob/S3 deposu kullanılmalıdır (yukarıdaki TODO).
     /// </summary>
-    public static readonly string SharedUploadsRoot = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Dekorras", "uploads");
+    /// <remarks>Artık yapılandırmadan gelir (varsayılan: Storefront wwwroot/uploads) - bkz. <see cref="StoragePaths"/>.</remarks>
+    public static string SharedUploadsRoot => StoragePaths.UploadsRoot;
 
 
     public async Task<string> UploadAsync(string containerName, string fileName, Stream content, string contentType, CancellationToken cancellationToken)

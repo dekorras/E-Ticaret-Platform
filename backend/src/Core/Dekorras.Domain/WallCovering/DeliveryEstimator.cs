@@ -85,7 +85,13 @@ public static class DeliveryEstimator
             d.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday && !TurkishHolidays.IsHoliday(d) && (extraHolidays is null || !extraHolidays.Contains(d));
 
         var timeOfDay = local.TimeOfDay;
-        if (!IsBusinessDay(day)) timeOfDay = TimeSpan.FromHours(9); // hafta sonu gelen talep: iş günü sabahından say
+        if (!IsBusinessDay(day))
+        {
+            // Hafta sonu/tatilde gelen talep: sayım bir sonraki iş gününün SABAHINDAN başlar (o gün de süreye dahil
+            // olur). Önceden o iş günü de "eklenen" gün sayılıyordu: pazar talebine 2 iş günü = salı 09:00 (fiilen 1 gün).
+            do day = day.AddDays(1); while (!IsBusinessDay(day));
+            timeOfDay = TimeSpan.FromHours(9);
+        }
         for (var i = 0; i < days; i++)
         {
             do day = day.AddDays(1); while (!IsBusinessDay(day));

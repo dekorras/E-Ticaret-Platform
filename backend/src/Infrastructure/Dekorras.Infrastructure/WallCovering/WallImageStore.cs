@@ -9,8 +9,8 @@ namespace Dekorras.Infrastructure.WallCovering;
 /// VARSAYIM: S3 uyumlu depolama bu arayüzün ikinci bir uygulamasıyla eklenecek (LocalFileStorage'daki TODO ile aynı).</summary>
 public sealed class WallImageStore : IWallImageStore
 {
-    public static readonly string PrivateRoot = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Dekorras", "private");
+    /// <remarks>Varsayılan: App_Data/private (wwwroot DIŞINDA, sunulmaz) - bkz. <see cref="StoragePaths"/>.</remarks>
+    public static string PrivateRoot => StoragePaths.PrivateRoot;
 
     private readonly string _publicRoot;
     private readonly string _privateRoot;

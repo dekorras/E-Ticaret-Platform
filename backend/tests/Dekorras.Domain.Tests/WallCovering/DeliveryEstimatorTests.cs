@@ -71,4 +71,14 @@ public class DeliveryEstimatorTests
         var e = DeliveryEstimator.Estimate(Utc(2026, 10, 10, 7)); // Cumartesi
         Assert.Equal(new DateOnly(2026, 10, 12), e.ProductionStart);
     }
+
+    // 2026-10-04 pazar, 2026-10-07 çarşamba, 2026-10-09 cuma (TR saati = UTC+3).
+    [Theory]
+    [InlineData(2026, 10, 4, 18, 2026, 10, 7, 6)]   // pazar 21:00 → pazartesi sabahından 2 iş günü → çarşamba 09:00
+    [InlineData(2026, 10, 7, 7, 2026, 10, 9, 7)]    // çarşamba 10:00 → cuma 10:00
+    [InlineData(2026, 10, 9, 12, 2026, 10, 13, 12)] // cuma 15:00 → salı 15:00 (hafta sonu atlanır)
+    public void IsGunuEkleme_HaftaSonuTalebiPazartesiSabahindanSayilir(int y, int m, int d, int h, int ey, int em, int ed, int eh)
+    {
+        Assert.Equal(Utc(ey, em, ed, eh), DeliveryEstimator.AddBusinessDays(Utc(y, m, d, h), 2));
+    }
 }

@@ -25,3 +25,7 @@ Publish/
 
 # IDE
 .idea/
+
+# Yuklenen dosyalar (urun gorselleri) ve ozel dosyalar (uretim PDF, musteri ekleri) - calisma zamani verisi, git e girmez
+**/wwwroot/uploads/
+**/App_Data/

@@ -67,6 +67,8 @@ public static class DependencyInjection
         services.AddScoped<IEmailSender, SmtpEmailSender>();
         services.AddScoped<IPushNotificationSender, FirebasePushNotificationSender>();
 
+        // Yüklenen dosya klasörleri appsettings "Storage" bölümünden (varsayılan wwwroot/uploads + App_Data/private).
+        StoragePaths.Configure(configuration);
         services.AddSingleton<IFileStorage>(_ => new LocalFileStorage(LocalFileStorage.SharedUploadsRoot));
 
         // Ölçüye özel duvar kağıdı: görsel depolama/türev/render (ImageSharp) + render önbelleği (HybridCache)
